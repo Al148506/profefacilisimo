@@ -1,3 +1,4 @@
+using Profefacilisimo.Api;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text;
@@ -131,6 +132,7 @@ auth.MapGet("/me", async (ClaimsPrincipal principal, IAuthService service) =>
     var user = await service.GetUserAsync(userId);
     return user is null ? Results.Unauthorized() : Results.Ok(user);
 }).RequireAuthorization();
+app.MapLessonEndpoints();
 app.Run();
 
 static bool ValidCredentials(string? email, string? password, bool registration) =>

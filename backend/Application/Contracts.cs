@@ -1,3 +1,6 @@
+using Profefacilisimo.Application.Lessons;
+using Profefacilisimo.Domain;
+
 namespace Profefacilisimo.Application;
 
 public record RegisterRequest(string Email, string Password);
@@ -16,9 +19,11 @@ public interface IAuthService
     Task<UserDto?> GetUserAsync(Guid userId);
 }
 
-// An explicit query boundary, not a generic repository. No public lesson CRUD in phase 1.
+// An explicit query boundary, not a generic repository.
 public interface ILessonReader
 {
     Task<LessonSummary?> FindOwnedAsync(Guid lessonId, Guid userId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<LessonListItemDto>> ListOwnedAsync(Guid userId, bool trash, string? search, LessonLevel? level, CancellationToken cancellationToken);
+    Task<LessonDetailsDto?> GetOwnedDetailsAsync(Guid lessonId, Guid userId, CancellationToken cancellationToken);
 }
 public record LessonSummary(Guid Id, string Title, int ActivityCount);
