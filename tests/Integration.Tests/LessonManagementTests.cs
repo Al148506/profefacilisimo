@@ -379,4 +379,137 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
             Assert.Contains("PUT", string.Join(",", response.Headers.GetValues("Access-Control-Allow-Methods")));
         }
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("invalid")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public async Task DuplicateRequiresValidAuthentication(string? sub)
+    {
+        using var client = Client(sub);
+        Assert.Equal(HttpStatusCode.Unauthorized,
+            (await client.PostAsync($"/api/lessons/{Guid.NewGuid()}/duplicate", null)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DuplicateCopiesPersistedGraphWithNewIdsAndIndependentMetadata(bool withActivities)
+    {
+        var (owner, _) = await Seed();
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var source = new Lesson(owner, new string('x', 200), LessonLevel.B2, "Tema", "Objetivo", withActivities ? 60 : null);
+        if (withActivities)
+        {
+            source.AddActivity("Hablar", "Instrucciones", new SpeakingContent(["Pregunta"]));
+            source.AddActivity("Leer", "Instrucciones", new ReadingContent("Texto", ["Pregunta"]), 10);
+            source.AddActivity("Escribir", "Instrucciones", new WritingContent("Consigna"));
+            source.AddActivity("Gramática", "Instrucciones", new VocabularyGrammarContent("Explicación", ["Ejercicio"]), 20);
+        }
+        db.Lessons.Add(source);
+        await db.SaveChangesAsync();
+        using var client = Client(owner.ToString());
+        var original = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{source.Id}"))!;
+        // Neither an unsaved tracked edit nor extra request fields may replace persisted source data.
+        source.UpdateMetadata("No guardado", LessonLevel.A2, "Local", "Local");
+        var response = await client.PostAsJsonAsync($"/api/lessons/{source.Id}/duplicate",
+            new { title = "Inyectado", userId = Guid.NewGuid(), activities = Array.Empty<object>() });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var copy = (await response.Content.ReadFromJsonAsync<LessonDetailsDto>())!;
+        Assert.Equal($"/api/lessons/{copy.Id}", response.Headers.Location!.OriginalString);
+        Assert.NotEqual(original.Id, copy.Id);
+        Assert.Equal(new string('x', 192) + " (copia)", copy.Title);
+        Assert.Equal((original.Level, original.Topic, original.Objective, original.EstimatedDuration),
+            (copy.Level, copy.Topic, copy.Objective, copy.EstimatedDuration));
+        Assert.Null(copy.DeletedAt);
+        Assert.True(copy.CreatedAt >= original.CreatedAt);
+        Assert.Equal(copy.CreatedAt, copy.UpdatedAt);
+        Assert.Equal(original.Activities.Count, copy.Activities.Count);
+        foreach (var (a, b) in original.Activities.Zip(copy.Activities))
+        {
+            Assert.NotEqual(a.Id, b.Id);
+            Assert.Equal((a.Type, a.Title, a.Instructions, a.Order, a.EstimatedDuration),
+                (b.Type, b.Title, b.Instructions, b.Order, b.EstimatedDuration));
+            Assert.Equal(a.Content.GetRawText(), b.Content.GetRawText());
+        }
+        db.ChangeTracker.Clear();
+        Assert.Equal(owner, (await db.Lessons.SingleAsync(x => x.Id == copy.Id)).UserId);
+        Assert.All(await db.Activities.Where(x => x.LessonId == copy.Id).ToListAsync(), x => Assert.Equal(copy.Id, x.LessonId));
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(response.Headers.Location,
+            new SaveLessonRequest("Copia editada", "A2", "Otro tema", "Otro objetivo"))).StatusCode);
+        var unchanged = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{source.Id}"))!;
+        Assert.Equal(original.Title, unchanged.Title);
+        Assert.Equal(original.UpdatedAt, unchanged.UpdatedAt);
+        Assert.Equal(original.Activities.Select(x => x.Id), unchanged.Activities.Select(x => x.Id));
+    }
+
+    [Fact]
+    public async Task DuplicateRejectsForeignMissingAndTrashedSources()
+    {
+        var (owner, lessons) = await Seed("Papelera");
+        var (_, others) = await Seed("Ajena");
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Lessons.Where(x => x.Id == lessons[0].Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.DeletedAt, DateTimeOffset.UtcNow));
+        using var client = Client(owner.ToString());
+        var count = await db.Lessons.CountAsync();
+        foreach (var id in new[] { lessons[0].Id, others[0].Id, Guid.NewGuid() })
+        {
+            var response = await client.PostAsync($"/api/lessons/{id}/duplicate", null);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        }
+        Assert.Equal(count, await db.Lessons.CountAsync());
+    }
+
+    [Fact]
+    public async Task DuplicateRollsBackWhenFailureOccursAfterInsertsBeforeCommit()
+    {
+        var (owner, _) = await Seed();
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var source = new Lesson(owner, "Original", LessonLevel.B1, "Tema", "Objetivo");
+        source.AddActivity("Una", "Instrucciones", new WritingContent("Texto"));
+        source.AddActivity("Dos", "Instrucciones", new SpeakingContent(["Pregunta"]), 5);
+        db.Lessons.Add(source);
+        await db.SaveChangesAsync();
+        var lessonIds = await db.Lessons.Select(x => x.Id).OrderBy(x => x).ToArrayAsync();
+        var activityIds = await db.Activities.Select(x => x.Id).OrderBy(x => x).ToArrayAsync();
+        var interceptor = new FailAfterCopyInsert();
+        await using (var failingDb = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(fixture.ConnectionString).AddInterceptors(interceptor).Options))
+        {
+            var service = new LessonService(failingDb);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.DuplicateAsync(source.Id, owner, default));
+        }
+        Assert.True(interceptor.ObservedUncommittedCopy);
+        Assert.Equal(lessonIds, await db.Lessons.Select(x => x.Id).OrderBy(x => x).ToArrayAsync());
+        Assert.Equal(activityIds, await db.Activities.Select(x => x.Id).OrderBy(x => x).ToArrayAsync());
+        // The source remains usable after rollback.
+        using var client = Client(owner.ToString());
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsync($"/api/lessons/{source.Id}/duplicate", null)).StatusCode);
+    }
+
+    private sealed class FailAfterCopyInsert : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor
+    {
+        public bool ObservedUncommittedCopy { get; private set; }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesCompletedEventData eventData,
+            int result, CancellationToken cancellationToken = default)
+        {
+            var db = (AppDbContext)eventData.Context!;
+            var transaction = db.Database.CurrentTransaction;
+            Assert.NotNull(transaction);
+            Assert.Equal(System.Data.IsolationLevel.RepeatableRead,
+                Microsoft.EntityFrameworkCore.Storage.DbContextTransactionExtensions.GetDbTransaction(transaction).IsolationLevel);
+            var copy = db.ChangeTracker.Entries<Lesson>().Single().Entity;
+            Assert.True(await db.Lessons.AsNoTracking().AnyAsync(x => x.Id == copy.Id, cancellationToken));
+            Assert.Equal(2, await db.Activities.CountAsync(x => x.LessonId == copy.Id, cancellationToken));
+            ObservedUncommittedCopy = true;
+            throw new InvalidOperationException("Injected failure after all copy inserts, before commit.");
+        }
+    }
 }

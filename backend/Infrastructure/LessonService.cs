@@ -28,6 +28,21 @@ public sealed class LessonService(AppDbContext db) : ILessonService
         return new(LessonReader.ToDetails(lesson));
     }
 
+    public async Task<LessonDetailsDto?> DuplicateAsync(Guid lessonId, Guid userId, CancellationToken ct)
+    {
+        // A stable snapshot covers both the source graph and insertion of the independent copy.
+        await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
+        var source = await db.Lessons.AsNoTracking().Include(x => x.Activities)
+            .SingleOrDefaultAsync(x => x.Id == lessonId && x.UserId == userId && x.DeletedAt == null, ct);
+        if (source is null) return null;
+        var copy = source.Duplicate();
+        db.Lessons.Add(copy);
+        await db.SaveChangesAsync(ct);
+        var details = LessonReader.ToDetails(copy);
+        await transaction.CommitAsync(ct);
+        return details;
+    }
+
     private static Dictionary<string, string[]> Validate(SaveLessonRequest request)
     {
         var errors = new Dictionary<string, string[]>();

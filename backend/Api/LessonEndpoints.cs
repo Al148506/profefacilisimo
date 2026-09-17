@@ -14,6 +14,7 @@ public static class LessonEndpoints
         lessons.MapGet("/{id:guid}", Details);
         lessons.MapPost("", Create);
         lessons.MapPut("/{id:guid}", Update);
+        lessons.MapPost("/{id:guid}/duplicate", Duplicate);
     }
 
     private static async Task<IResult> List(ClaimsPrincipal principal, ILessonReader reader,
@@ -67,5 +68,15 @@ public static class LessonEndpoints
         return result.Details is null
             ? Results.Problem(statusCode: 404, title: "Clase no encontrada.")
             : Results.Ok(result.Details);
+    }
+
+    private static async Task<IResult> Duplicate(Guid id, ClaimsPrincipal principal, ILessonService service, CancellationToken ct)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
+            return Results.Unauthorized();
+        var copy = await service.DuplicateAsync(id, userId, ct);
+        return copy is null
+            ? Results.Problem(statusCode: 404, title: "Clase no encontrada.")
+            : Results.Created($"/api/lessons/{copy.Id}", copy);
     }
 }
