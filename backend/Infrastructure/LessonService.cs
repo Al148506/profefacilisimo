@@ -43,6 +43,37 @@ public sealed class LessonService(AppDbContext db) : ILessonService
         return details;
     }
 
+    public async Task<LessonTransitionResult> TrashAsync(Guid lessonId, Guid userId, CancellationToken ct)
+    {
+        var lesson = await db.Lessons.SingleOrDefaultAsync(x => x.Id == lessonId && x.UserId == userId, ct);
+        if (lesson is null) return LessonTransitionResult.NotFound;
+        if (lesson.DeletedAt is not null) return LessonTransitionResult.InvalidState;
+        lesson.MoveToTrash();
+        await db.SaveChangesAsync(ct);
+        return LessonTransitionResult.Success;
+    }
+
+    public async Task<LessonTransitionResult> RestoreAsync(Guid lessonId, Guid userId, CancellationToken ct)
+    {
+        var lesson = await db.Lessons.SingleOrDefaultAsync(x => x.Id == lessonId && x.UserId == userId, ct);
+        if (lesson is null) return LessonTransitionResult.NotFound;
+        if (lesson.DeletedAt is null) return LessonTransitionResult.InvalidState;
+        lesson.Restore();
+        await db.SaveChangesAsync(ct);
+        return LessonTransitionResult.Success;
+    }
+
+    public async Task<LessonTransitionResult> DeleteAsync(Guid lessonId, Guid userId, CancellationToken ct)
+    {
+        var lesson = await db.Lessons.SingleOrDefaultAsync(x => x.Id == lessonId && x.UserId == userId, ct);
+        if (lesson is null) return LessonTransitionResult.NotFound;
+        if (lesson.DeletedAt is null) return LessonTransitionResult.InvalidState;
+        // Do not load children: PostgreSQL's existing FK cascade removes the activities.
+        db.Lessons.Remove(lesson);
+        await db.SaveChangesAsync(ct);
+        return LessonTransitionResult.Success;
+    }
+
     private static Dictionary<string, string[]> Validate(SaveLessonRequest request)
     {
         var errors = new Dictionary<string, string[]>();

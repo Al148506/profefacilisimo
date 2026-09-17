@@ -512,4 +512,152 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
             throw new InvalidOperationException("Injected failure after all copy inserts, before commit.");
         }
     }
+
+    private static Task<HttpResponseMessage> Transition(HttpClient client, Guid id, string operation) =>
+        operation == "delete" ? client.DeleteAsync($"/api/lessons/{id}") :
+            client.PostAsync($"/api/lessons/{id}/{operation}", null);
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("invalid")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public async Task TrashRestoreDeleteRequireAuthentication(string? sub)
+    {
+        using var client = Client(sub);
+        foreach (var operation in new[] { "trash", "restore", "delete" })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await Transition(client, Guid.NewGuid(), operation)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TransitionsReturn404ForForeignClassesRegardlessOfState(bool deleted)
+    {
+        var (owner, _) = await Seed();
+        var (_, lessons) = await Seed("Privada");
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        if (deleted)
+            await db.Lessons.Where(x => x.Id == lessons[0].Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.DeletedAt, DateTimeOffset.UtcNow));
+        var before = await db.Database.SqlQueryRaw<string>("""
+            SELECT to_jsonb(l)::text AS "Value" FROM "Lessons" l ORDER BY l."Id"
+            """).ToArrayAsync();
+        using var client = Client(owner.ToString());
+        foreach (var id in new[] { lessons[0].Id, Guid.NewGuid() })
+        foreach (var operation in new[] { "trash", "restore", "delete" })
+        {
+            var response = await Transition(client, id, operation);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        }
+        Assert.Equal(before, await db.Database.SqlQueryRaw<string>("""
+            SELECT to_jsonb(l)::text AS "Value" FROM "Lessons" l ORDER BY l."Id"
+            """).ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task InvalidTransitionsReturn409AndLeaveDataUnchanged()
+    {
+        var (owner, lessons) = await Seed("Activa");
+        using var client = Client(owner.ToString());
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        async Task<string[]> Rows() => await db.Database.SqlQueryRaw<string>("""
+            SELECT to_jsonb(l)::text AS "Value" FROM "Lessons" l ORDER BY l."Id"
+            """).ToArrayAsync();
+        var before = await Rows();
+        foreach (var operation in new[] { "restore", "delete" })
+        {
+            var response = await Transition(client, lessons[0].Id, operation);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        }
+        Assert.Equal(before, await Rows());
+        Assert.Equal(HttpStatusCode.NoContent, (await Transition(client, lessons[0].Id, "trash")).StatusCode);
+        before = await Rows();
+        Assert.Equal(HttpStatusCode.Conflict, (await Transition(client, lessons[0].Id, "trash")).StatusCode);
+        Assert.Equal(before, await Rows());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TrashRestoreAndPermanentDeletePreserveThenCascadeOnlyTarget(bool withActivities)
+    {
+        var (owner, _) = await Seed();
+        var (other, _) = await Seed();
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var target = new Lesson(owner, "Clase", LessonLevel.B1, "Tema", "Objetivo", 60);
+        if (withActivities)
+        {
+            target.AddActivity("Una", "Instrucciones", new WritingContent("Texto"));
+            target.AddActivity("Dos", "Instrucciones", new SpeakingContent(["Pregunta"]), 15);
+        }
+        var untouched = new Lesson(owner, "Otra propia", LessonLevel.A2, "Tema", "Objetivo");
+        untouched.AddActivity("Leer", "Instrucciones", new ReadingContent("Texto", ["Pregunta"]));
+        var foreign = new Lesson(other, "Ajena", LessonLevel.B2, "Tema", "Objetivo");
+        foreign.AddActivity("Otra", "Instrucciones", new WritingContent("Texto"));
+        db.Lessons.AddRange(target, untouched, foreign);
+        await db.SaveChangesAsync();
+        async Task<string[]> Activities() => await db.Database.SqlQueryRaw<string>("""
+            SELECT to_jsonb(a)::text AS "Value" FROM "Activities" a ORDER BY a."Id"
+            """).ToArrayAsync();
+        var beforeActivities = await Activities();
+        using var client = Client(owner.ToString());
+        var original = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{target.Id}"))!;
+        var start = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var response = await Transition(client, target.Id, "trash");
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(await List(client), x => x.Id == target.Id);
+        var trashed = Assert.Single(await List(client, "?state=trash"));
+        Assert.Equal(target.Id, trashed.Id);
+        Assert.InRange(trashed.DeletedAt!.Value, start, DateTimeOffset.UtcNow);
+        Assert.Equal(beforeActivities, await Activities());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/lessons/{target.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/lessons/{target.Id}/duplicate", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync($"/api/lessons/{target.Id}",
+            new SaveLessonRequest("Cambio", "A2", "Tema", "Objetivo"))).StatusCode);
+        start = DateTimeOffset.UtcNow.AddSeconds(-1);
+        Assert.Equal(HttpStatusCode.NoContent, (await Transition(client, target.Id, "restore")).StatusCode);
+        Assert.Empty(await List(client, "?state=trash"));
+        var restored = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{target.Id}"))!;
+        Assert.Equal((original.Id, original.Title, original.Level, original.Topic, original.Objective, original.CreatedAt, original.EstimatedDuration),
+            (restored.Id, restored.Title, restored.Level, restored.Topic, restored.Objective, restored.CreatedAt, restored.EstimatedDuration));
+        Assert.Null(restored.DeletedAt);
+        Assert.InRange(restored.UpdatedAt, start, DateTimeOffset.UtcNow);
+        Assert.Equal(original.Activities.Select(x => x.Id), restored.Activities.Select(x => x.Id));
+        Assert.Equal(beforeActivities, await Activities());
+        Assert.Contains(await List(client), x => x.Id == target.Id);
+        db.ChangeTracker.Clear();
+        Assert.Equal(owner, (await db.Lessons.SingleAsync(x => x.Id == target.Id)).UserId);
+        Assert.Equal(HttpStatusCode.NoContent, (await Transition(client, target.Id, "trash")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await Transition(client, target.Id, "delete")).StatusCode);
+        Assert.False(await db.Lessons.AnyAsync(x => x.Id == target.Id));
+        Assert.False(await db.Activities.AnyAsync(x => x.LessonId == target.Id));
+        Assert.True(await db.Lessons.AnyAsync(x => x.Id == untouched.Id));
+        Assert.True(await db.Lessons.AnyAsync(x => x.Id == foreign.Id));
+        Assert.Single(await db.Activities.Where(x => x.LessonId == untouched.Id).ToListAsync());
+        Assert.Single(await db.Activities.Where(x => x.LessonId == foreign.Id).ToListAsync());
+        foreach (var operation in new[] { "trash", "restore", "delete" })
+            Assert.Equal(HttpStatusCode.NotFound, (await Transition(client, target.Id, operation)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("http://localhost:5173", true)]
+    [InlineData("https://evil.example", false)]
+    public async Task DeleteCorsKeepsExistingOriginRestriction(string origin, bool allowed)
+    {
+        using var client = fixture.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/lessons/" + Guid.NewGuid());
+        request.Headers.Add("Origin", origin);
+        request.Headers.Add("Access-Control-Request-Method", "DELETE");
+        request.Headers.Add("Access-Control-Request-Headers", "authorization");
+        var response = await client.SendAsync(request);
+        Assert.Equal(allowed, response.Headers.Contains("Access-Control-Allow-Origin"));
+        if (allowed)
+            Assert.Contains("DELETE", string.Join(",", response.Headers.GetValues("Access-Control-Allow-Methods")));
+    }
 }

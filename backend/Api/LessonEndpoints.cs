@@ -15,6 +15,9 @@ public static class LessonEndpoints
         lessons.MapPost("", Create);
         lessons.MapPut("/{id:guid}", Update);
         lessons.MapPost("/{id:guid}/duplicate", Duplicate);
+        lessons.MapPost("/{id:guid}/trash", Trash);
+        lessons.MapPost("/{id:guid}/restore", Restore);
+        lessons.MapDelete("/{id:guid}", Delete);
     }
 
     private static async Task<IResult> List(ClaimsPrincipal principal, ILessonReader reader,
@@ -79,4 +82,33 @@ public static class LessonEndpoints
             ? Results.Problem(statusCode: 404, title: "Clase no encontrada.")
             : Results.Created($"/api/lessons/{copy.Id}", copy);
     }
+
+    private static async Task<IResult> Trash(Guid id, ClaimsPrincipal principal, ILessonService service, CancellationToken ct)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
+            return Results.Unauthorized();
+        return TransitionResponse(await service.TrashAsync(id, userId, ct));
+    }
+
+    private static async Task<IResult> Restore(Guid id, ClaimsPrincipal principal, ILessonService service, CancellationToken ct)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
+            return Results.Unauthorized();
+        return TransitionResponse(await service.RestoreAsync(id, userId, ct));
+    }
+
+    private static async Task<IResult> Delete(Guid id, ClaimsPrincipal principal, ILessonService service, CancellationToken ct)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
+            return Results.Unauthorized();
+        return TransitionResponse(await service.DeleteAsync(id, userId, ct));
+    }
+
+    private static IResult TransitionResponse(LessonTransitionResult result) => result switch
+    {
+        LessonTransitionResult.Success => Results.NoContent(),
+        LessonTransitionResult.NotFound => Results.Problem(statusCode: 404, title: "Clase no encontrada."),
+        LessonTransitionResult.InvalidState => Results.Problem(statusCode: 409, title: "La clase no está en el estado requerido para esta operación."),
+        _ => throw new ArgumentOutOfRangeException(nameof(result))
+    };
 }

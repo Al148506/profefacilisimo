@@ -53,7 +53,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.WithOrigins(origin)
-    .WithMethods("GET", "POST", "PUT").WithHeaders("Content-Type", "Authorization", "X-Requested-With").AllowCredentials()));
+    .WithMethods("GET", "POST", "PUT", "DELETE").WithHeaders("Content-Type", "Authorization", "X-Requested-With").AllowCredentials()));
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
