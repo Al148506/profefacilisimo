@@ -1,6 +1,6 @@
 # SPEC 01 — Gestión de clases · MVP
 
-> **Estado:** Borrador
+> **Estado:** Aprobado
 > **Depende de:** Base de fase 1 implementada; ninguna especificación previa.
 > **Fecha:** 2026-09-17
 > **Objetivo:** Permitir al profesor crear, encontrar, editar, duplicar y recuperar sus clases mediante un flujo mínimo y privado.
@@ -59,12 +59,12 @@ Los controles de actividades y las nuevas reglas de duración pertenecen exclusi
 
 ### Crear y editar
 
-| Campo | Validación en frontend y backend |
-| --- | --- |
-| Title | Obligatorio, máximo 200 caracteres |
-| Topic | Obligatorio, máximo 200 caracteres |
+| Campo     | Validación en frontend y backend    |
+| --------- | ----------------------------------- |
+| Title     | Obligatorio, máximo 200 caracteres  |
+| Topic     | Obligatorio, máximo 200 caracteres  |
 | Objective | Obligatorio, máximo 2000 caracteres |
-| Level | Obligatorio; A2, B1 o B2 |
+| Level     | Obligatorio; A2, B1 o B2            |
 
 Los textos se recortan y no pueden quedar vacíos o contener únicamente espacios.
 Los títulos no necesitan ser únicos.
@@ -147,12 +147,12 @@ Api obtiene el usuario autenticado y transforma los resultados a HTTP.
 
 Definir en backend/Application/Lessons/LessonDtos.cs:
 
-| DTO | Campos |
-| --- | --- |
-| SaveLessonRequest | Title, Level, Topic, Objective |
-| LessonListItemDto | Id, Title, Level, Topic, UpdatedAt, DeletedAt |
-| LessonDetailsDto | Id, Title, Level, Topic, Objective, EstimatedDuration, CreatedAt, UpdatedAt, DeletedAt, Activities |
-| LessonActivityDto | Id, Type, Title, Instructions, Content, Order, EstimatedDuration |
+| DTO               | Campos                                                                                             |
+| ----------------- | -------------------------------------------------------------------------------------------------- |
+| SaveLessonRequest | Title, Level, Topic, Objective                                                                     |
+| LessonListItemDto | Id, Title, Level, Topic, UpdatedAt, DeletedAt                                                      |
+| LessonDetailsDto  | Id, Title, Level, Topic, Objective, EstimatedDuration, CreatedAt, UpdatedAt, DeletedAt, Activities |
+| LessonActivityDto | Id, Type, Title, Instructions, Content, Order, EstimatedDuration                                   |
 
 El listado devuelve un array, sin LessonPageDto, Page, PageSize o TotalCount.
 SaveLessonRequest se reutiliza para crear y editar; no incluye UserId, Activities, DeletedAt ni duración.
@@ -167,16 +167,16 @@ No devolver IResult desde Application ni añadir abstracciones genéricas de per
 
 Todos requieren autenticación.
 
-| Método y ruta | Función | Éxito |
-| --- | --- | --- |
-| GET /api/lessons | Listado activo o papelera | 200 + array |
-| GET /api/lessons/{id} | Detalle activo propio | 200 + detalle |
-| POST /api/lessons | Crear sin actividades | 201 + detalle y Location |
-| PUT /api/lessons/{id} | Guardar metadatos | 200 + detalle |
-| POST /api/lessons/{id}/duplicate | Copiar clase activa persistida | 201 + detalle y Location |
-| POST /api/lessons/{id}/trash | Enviar a papelera | 204 |
-| POST /api/lessons/{id}/restore | Restaurar | 204 |
-| DELETE /api/lessons/{id} | Borrar definitivamente desde papelera | 204 |
+| Método y ruta                    | Función                               | Éxito                    |
+| -------------------------------- | ------------------------------------- | ------------------------ |
+| GET /api/lessons                 | Listado activo o papelera             | 200 + array              |
+| GET /api/lessons/{id}            | Detalle activo propio                 | 200 + detalle            |
+| POST /api/lessons                | Crear sin actividades                 | 201 + detalle y Location |
+| PUT /api/lessons/{id}            | Guardar metadatos                     | 200 + detalle            |
+| POST /api/lessons/{id}/duplicate | Copiar clase activa persistida        | 201 + detalle y Location |
+| POST /api/lessons/{id}/trash     | Enviar a papelera                     | 204                      |
+| POST /api/lessons/{id}/restore   | Restaurar                             | 204                      |
+| DELETE /api/lessons/{id}         | Borrar definitivamente desde papelera | 204                      |
 
 **Listado:** admite state=active|trash, search y level.
 state es active por defecto.
@@ -200,12 +200,12 @@ No introducir infraestructura de concurrencia ni reintentos automáticos de escr
 
 ## 7. Pantallas y estados frontend
 
-| Ruta | Pantalla |
-| --- | --- |
-| / | Mis clases, búsqueda, nivel y acciones |
-| /lessons/new | Crear clase |
-| /lessons/:id/edit | Editar metadatos |
-| /lessons/trash | Papelera con restauración y borrado definitivo |
+| Ruta              | Pantalla                                       |
+| ----------------- | ---------------------------------------------- |
+| /                 | Mis clases, búsqueda, nivel y acciones         |
+| /lessons/new      | Crear clase                                    |
+| /lessons/:id/edit | Editar metadatos                               |
+| /lessons/trash    | Papelera con restauración y borrado definitivo |
 
 Reutilizar las rutas protegidas y la sesión.
 Un mismo formulario sirve para creación y edición.
@@ -223,17 +223,17 @@ Los errores ofrecen mensaje y reintento apropiado; Saving deshabilita el botón 
 
 Las siguientes modificaciones pertenecen a la futura implementación, no a esta revisión.
 
-| Área | Archivos |
-| --- | --- |
-| Dominio | Modificar backend/Domain/Lesson.cs y Activity.cs; esta última solo para copia independiente |
-| Contratos | Modificar backend/Application/Contracts.cs; crear backend/Application/Lessons/LessonDtos.cs e ILessonService.cs |
-| Persistencia | Modificar backend/Infrastructure/AppDbContext.cs y LessonReader.cs; crear LessonService.cs en esa misma carpeta |
-| Migración | Crear backend/Infrastructure/Migrations/<timestamp>_AddLessonSoftDelete.cs y Designer; actualizar AppDbContextModelSnapshot.cs |
-| API | Modificar backend/Api/Program.cs; crear backend/Api/LessonEndpoints.cs |
-| Integración frontend | Modificar frontend/src/auth.ts, App.tsx y styles.css |
-| Lecciones frontend | Crear frontend/src/lessons/lesson-api.ts, lesson-schema.ts, LessonsPage.tsx y LessonEditorPage.tsx |
-| Pruebas existentes | Adaptar tests/Domain.Tests/LessonTests.cs y frontend/src/App.test.tsx |
-| Pruebas nuevas | Crear tests/Integration.Tests/LessonManagementTests.cs, frontend/src/lessons/LessonsPage.test.tsx, LessonEditorPage.test.tsx y frontend/e2e/lessons.spec.ts |
+| Área                 | Archivos                                                                                                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dominio              | Modificar backend/Domain/Lesson.cs y Activity.cs; esta última solo para copia independiente                                                                 |
+| Contratos            | Modificar backend/Application/Contracts.cs; crear backend/Application/Lessons/LessonDtos.cs e ILessonService.cs                                             |
+| Persistencia         | Modificar backend/Infrastructure/AppDbContext.cs y LessonReader.cs; crear LessonService.cs en esa misma carpeta                                             |
+| Migración            | Crear backend/Infrastructure/Migrations/<timestamp>\_AddLessonSoftDelete.cs y Designer; actualizar AppDbContextModelSnapshot.cs                             |
+| API                  | Modificar backend/Api/Program.cs; crear backend/Api/LessonEndpoints.cs                                                                                      |
+| Integración frontend | Modificar frontend/src/auth.ts, App.tsx y styles.css                                                                                                        |
+| Lecciones frontend   | Crear frontend/src/lessons/lesson-api.ts, lesson-schema.ts, LessonsPage.tsx y LessonEditorPage.tsx                                                          |
+| Pruebas existentes   | Adaptar tests/Domain.Tests/LessonTests.cs y frontend/src/App.test.tsx                                                                                       |
+| Pruebas nuevas       | Crear tests/Integration.Tests/LessonManagementTests.cs, frontend/src/lessons/LessonsPage.test.tsx, LessonEditorPage.test.tsx y frontend/e2e/lessons.spec.ts |
 
 No se requiere modificar main.tsx ni crear UnsavedChangesGuard global.
 No se cambian paquetes, SDK, arquitectura ni estrategia de autenticación.
@@ -243,18 +243,18 @@ No se cambian paquetes, SDK, arquitectura ni estrategia de autenticación.
 Cada etapa mantiene la aplicación compilable e incorpora las pruebas del comportamiento añadido.
 No se publican endpoints simulados ni se pospone toda la validación al final.
 
-| Etapa | Entrega | Verificación |
-| --- | --- | --- |
-| 1 | Reglas de metadatos, soft delete/restauración y copia independiente en dominio | Validación, conservación de actividades e Id nuevos en copias |
-| 2 | Mapeo DeletedAt y migración AddLessonSoftDelete | Migrar datos anteriores sin perder clases o actividades |
-| 3 | DTO, consultas y endpoints de listado/detalle | Dos usuarios, búsqueda/nivel, orden y 404 ajenos |
-| 4 | Crear y actualizar solo metadatos | Clase sin actividades, datos inválidos y PUT que conserva Activities |
-| 5 | Duplicación transaccional | Copia completa independiente y reversión ante fallo provocado |
-| 6 | Trash, restore y DELETE con cascada existente | Conservación, recuperación, eliminación definitiva y estados inválidos |
-| 7 | Mis clases con transporte autenticado y filtros locales | Loading/Error/Empty, búsqueda y nivel sin paginación |
-| 8 | Formularios de creación/edición y Guardar | Validación, persistencia tras recargar y aviso sencillo de descarte |
-| 9 | Duplicar desde listado y abrir la copia | E2E y botón deshabilitado durante solicitud |
-| 10 | Papelera, restauración y confirmaciones; cierre del flujo y documentación de uso | E2E login → crear → editar → duplicar → papelera → restaurar y borrado definitivo |
+| Etapa | Entrega                                                                          | Verificación                                                                      |
+| ----- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1     | Reglas de metadatos, soft delete/restauración y copia independiente en dominio   | Validación, conservación de actividades e Id nuevos en copias                     |
+| 2     | Mapeo DeletedAt y migración AddLessonSoftDelete                                  | Migrar datos anteriores sin perder clases o actividades                           |
+| 3     | DTO, consultas y endpoints de listado/detalle                                    | Dos usuarios, búsqueda/nivel, orden y 404 ajenos                                  |
+| 4     | Crear y actualizar solo metadatos                                                | Clase sin actividades, datos inválidos y PUT que conserva Activities              |
+| 5     | Duplicación transaccional                                                        | Copia completa independiente y reversión ante fallo provocado                     |
+| 6     | Trash, restore y DELETE con cascada existente                                    | Conservación, recuperación, eliminación definitiva y estados inválidos            |
+| 7     | Mis clases con transporte autenticado y filtros locales                          | Loading/Error/Empty, búsqueda y nivel sin paginación                              |
+| 8     | Formularios de creación/edición y Guardar                                        | Validación, persistencia tras recargar y aviso sencillo de descarte               |
+| 9     | Duplicar desde listado y abrir la copia                                          | E2E y botón deshabilitado durante solicitud                                       |
+| 10    | Papelera, restauración y confirmaciones; cierre del flujo y documentación de uso | E2E login → crear → editar → duplicar → papelera → restaurar y borrado definitivo |
 
 Las pruebas de integración usan PostgreSQL real y bases aisladas.
 El E2E se amplía con cada pantalla conectada.
@@ -317,17 +317,17 @@ Esta tarea no modifica SPEC 02 ni decide reintroducir concurrencia avanzada en e
 
 ## 12. Riesgos principales
 
-| Riesgo | Tratamiento MVP |
-| --- | --- |
-| Acceso mediante un Id ajeno | Verificar propietario en cada operación, también papelera y copia |
-| Sobrescritura desde otra pestaña | Aceptar last write wins y documentar el límite |
-| Listado demasiado grande | Incorporar paginación posteriormente si el volumen lo exige |
-| Copia parcial o incoherente | Lectura y escritura del conjunto dentro de una transacción |
-| Repetición de POST tras fallo de red | Deshabilitar botón y no reintentar automáticamente escrituras inciertas |
-| Borrado definitivo accidental | Exigir papelera y confirmación con el título |
-| Pérdida del formulario al salir | Aviso en navegación controlada y beforeunload, sin prometer recuperación |
+| Riesgo                                 | Tratamiento MVP                                                               |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| Acceso mediante un Id ajeno            | Verificar propietario en cada operación, también papelera y copia             |
+| Sobrescritura desde otra pestaña       | Aceptar last write wins y documentar el límite                                |
+| Listado demasiado grande               | Incorporar paginación posteriormente si el volumen lo exige                   |
+| Copia parcial o incoherente            | Lectura y escritura del conjunto dentro de una transacción                    |
+| Repetición de POST tras fallo de red   | Deshabilitar botón y no reintentar automáticamente escrituras inciertas       |
+| Borrado definitivo accidental          | Exigir papelera y confirmación con el título                                  |
+| Pérdida del formulario al salir        | Aviso en navegación controlada y beforeunload, sin prometer recuperación      |
 | PUT o refetch altera datos no deseados | DTO acotado, actualización selectiva y no reemplazar un formulario modificado |
-| SPEC 02 depende de contratos retirados | Señalar la incompatibilidad y revisar esa especificación por separado |
+| SPEC 02 depende de contratos retirados | Señalar la incompatibilidad y revisar esa especificación por separado         |
 
 No se implementan funciones ni se modifican archivos de código en esta tarea.
 La especificación permanece en Borrador para revisión del usuario.
