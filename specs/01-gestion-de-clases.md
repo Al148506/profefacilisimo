@@ -1,374 +1,333 @@
-# SPEC 01 — Gestión de clases
+# SPEC 01 — Gestión de clases · MVP
 
 > **Estado:** Borrador
-> **Depende de:** Ninguna especificación previa; requiere la base de fase 1 ya implementada.
+> **Depende de:** Base de fase 1 implementada; ninguna especificación previa.
 > **Fecha:** 2026-09-17
-> **Objetivo:** Permitir al profesor gestionar sus clases con búsqueda, edición, duplicación completa y papelera privada.
+> **Objetivo:** Permitir al profesor crear, encontrar, editar, duplicar y recuperar sus clases mediante un flujo mínimo y privado.
 
-## 1. Contexto y alcance
+Esta revisión sustituye el alcance anterior de SPEC 01.
+La paginación y la concurrencia avanzada se posponen por decisión explícita del usuario.
+No se implementa código durante esta revisión.
 
-La fase 2 se divide en esta especificación y SPEC 02 — Editor de actividades.
-Esta entrega incorpora la gestión de clases de extremo a extremo.
-SPEC 02 amplía el mismo editor con actividades, tiempos y guardado del conjunto completo.
-El resultado conjunto de ambas especificaciones constituye el Class Builder.
+## 1. Objetivo y base técnica
 
-La implementación vigente usa .NET 9 y SDK 9.0.318.
-La mención a .NET 10 del README es histórica y no autoriza a cambiar de framework.
-Se conservan React, TypeScript, Vite, TanStack Query, React Hook Form y Zod.
-Se conservan PostgreSQL, EF Core 9, Identity, JWT y JSONB.
-Se mantienen Domain, Application, Infrastructure y Api.
+Validar el flujo:
 
-**Incluye:**
-
-- Listar únicamente las clases del usuario autenticado.
-- Ordenar las clases por última modificación, con 20 elementos por página.
-- Buscar por título y filtrar por nivel A2, B1 o B2.
-- Crear clases sin actividades.
-- Consultar y modificar título, nivel, tema y objetivo.
-- Guardar explícitamente y advertir antes de descartar cambios.
-- Duplicar la versión persistida de una clase con todas sus actividades.
-- Enviar clases a la papelera.
-- Restaurar clases o eliminarlas definitivamente con confirmación.
-- Detectar modificaciones concurrentes sin sobrescribir datos silenciosamente.
-- Mostrar estados vacíos, carga, errores y confirmaciones.
-- Probar aislamiento entre usuarios y operaciones con PostgreSQL real.
-
-**Fuera del alcance:**
-
-- Edición, creación o reordenamiento de actividades: SPEC 02.
-- Lesson Player, IA, plantillas y biblioteca de actividades.
-- Cursos, estudiantes, roles nuevos o clases compartidas.
-- Autoguardado, funcionamiento offline o historial de versiones.
-- Borrado automático de la papelera y operaciones masivas.
-- Refactorizaciones ajenas a estos puntos de integración.
-
-## 2. Reglas funcionales
-
-### 2.1 Listado y filtros
-
-- La ruta inicial autenticada muestra las clases activas del profesor.
-- Cada elemento muestra título, nivel, tema, número de actividades y última modificación.
-- Las acciones son Editar, Duplicar y Enviar a papelera.
-- El orden es UpdatedAt descendente, con Id como desempate estable.
-- page empieza en 1 y el tamaño de página es siempre 20.
-- El total de resultados corresponde al usuario, estado y filtros aplicados.
-- La búsqueda es por coincidencia parcial del título, sin distinguir mayúsculas.
-- Se eliminan espacios exteriores del término.
-- Los caracteres de patrón de SQL se interpretan literalmente.
-- No se añade normalización de acentos ni búsqueda en contenido.
-- Un campo vacío no filtra por título.
-- Cambiar búsqueda, nivel o vista reinicia la página a 1.
-- Los filtros y la página se reflejan en la URL.
-- Si una acción vacía la última página, se muestra la anterior válida.
-- Se distinguen “Aún no tienes clases” y “No hay resultados para estos filtros”.
-
-### 2.2 Creación y edición de metadatos
-
-- Título, nivel, tema y objetivo son obligatorios.
-- Se respetan los límites actuales: título 200, tema 200 y objetivo 2000 caracteres.
-- Los textos obligatorios no pueden contener únicamente espacios.
-- Los títulos no necesitan ser únicos.
-- Los únicos niveles son A2, B1 y B2.
-- Una clase puede guardarse sin actividades.
-- El propietario se obtiene del claim sub.
-- El cliente nunca elige ni cambia UserId.
-- CreatedAt y UpdatedAt usan UTC del servidor.
-- Crear abre la nueva clase en su ruta de edición después de una respuesta exitosa.
-- Un error de validación conserva todos los valores del formulario.
-- No existe un campo editable para la duración total.
-
-**Límite entre entregas:** aquí Guardar modifica solo los metadatos.
-No reemplaza ni elimina actividades existentes.
-La obligatoriedad de completar duraciones antiguas y el guardado de toda la clase entran con SPEC 02.
-Esta transición permite que SPEC 01 sea utilizable sin adelantar el editor de actividades.
-
-### 2.3 Duplicación
-
-- Duplicar se ofrece desde el listado de clases activas.
-- Se copia exclusivamente la versión guardada.
-- No se incluyen cambios locales pendientes en otra pestaña.
-- El título es “Título original (copia)”.
-- Si es necesario, se recorta el título base para respetar los 200 caracteres.
-- La copia tiene nuevo Id, nueva versión y nuevas fechas.
-- El propietario es el mismo usuario autenticado.
-- Cada actividad obtiene un Id nuevo y referencia a la nueva clase.
-- Se conservan tipos, títulos, instrucciones, contenido JSONB, duraciones y orden.
-- Cuando exista TransitionAfterMinutes por SPEC 02, también se copia.
-- Una copia es independiente: editarla no modifica el original.
-- Una clase sin actividades puede duplicarse.
-- Una clase de la papelera no puede duplicarse.
-- Las duraciones antiguas desconocidas se conservan como desconocidas.
-- Duplicar no inventa tiempos ni convierte una duración incompleta en completa.
-- La operación es atómica: no queda una copia parcial si falla.
-- La pantalla abre el editor de la nueva clase tras recibir su Id.
-- Se deshabilita el botón mientras la solicitud está en curso.
-- No se reintenta automáticamente una duplicación ante una respuesta de red incierta.
-
-### 2.4 Papelera
-
-- La papelera es privada y está separada del listado activo.
-- Ofrece la misma búsqueda, filtro por nivel y paginación.
-- Se ordena por DeletedAt descendente, con Id como desempate.
-- Enviar a papelera requiere confirmación.
-- El borrado lógico conserva la clase y todas sus actividades.
-- Las clases archivadas no se editan ni se duplican.
-- La papelera permite Restaurar o Eliminar definitivamente.
-- Restaurar conserva los Id de la clase y de sus actividades.
-- Restaurar actualiza UpdatedAt y la versión.
-- El borrado definitivo solo se permite sobre una clase ya en papelera.
-- La confirmación muestra el título y advierte que las actividades también se perderán.
-- La eliminación definitiva utiliza la cascada existente en PostgreSQL.
-- No hay caducidad de 30 días, tarea programada ni limpieza automática.
-- Se confirma el resultado solo después de una respuesta exitosa.
-- Un fallo de red no hace desaparecer anticipadamente el elemento de la lista.
-
-### 2.5 Concurrencia y cambios pendientes
-
-- Cada clase tiene una versión opaca que cambia con sus modificaciones.
-- Editar, enviar a papelera, restaurar y borrar definitivamente requieren la versión leída.
-- Duplicar verifica la versión de origen al tomar una instantánea consistente.
-- Si otra pestaña guardó antes, la operación no sobrescribe ese cambio.
-- El editor conserva el formulario local y muestra un aviso de conflicto.
-- No se sustituye automáticamente el contenido del formulario con un refetch.
-- “Recargar versión guardada” exige confirmar que se descartarán cambios locales.
-- No hay fusión automática ni botón de sobrescritura forzada.
-- Si la clase fue archivada o eliminada, se avisa y se impide guardarla.
-- Navegar dentro de la aplicación con cambios pendientes exige confirmar descarte.
-- Recargar o cerrar la pestaña usa la advertencia nativa cuando el navegador la admite.
-- El formulario no se considera guardado hasta recibir éxito de la API.
-- El borrador vive en memoria; no se promete recuperación tras cerrar el navegador.
-- No se guardan tokens ni contenido de clases en localStorage.
-
-## 3. Modelo de datos y contratos
-
-### 3.1 Persistencia
-
-Se amplía Lesson, sin crear entidades de curso, estudiante o carpeta:
-
-```csharp
-public DateTimeOffset? DeletedAt { get; private set; }
-public Guid Version { get; private set; }
+```text
+Login → Mis clases → Crear clase → Editar metadatos → Guardar
+      → Duplicar → Enviar a papelera / restaurar
+      → posteriormente SPEC 02: editar actividades
 ```
 
-- DeletedAt null significa activa.
-- Version es un token de concurrencia de EF Core, no una fecha ni un contador del cliente.
-- Los cambios en actividades de SPEC 02 también actualizan Version de su Lesson.
-- Las filas existentes reciben una versión inicial válida durante la migración.
-- La migración conserva todas las clases, actividades e Id.
-- No se modifica el JSONB ni se elimina la columna de duración en esta entrega.
-- Añadir un índice compuesto para consultas por UserId, DeletedAt y UpdatedAt.
-- Mantener el índice único de orden por actividad y las relaciones actuales.
-- Las consultas filtran explícitamente UserId y estado.
-- No basta con ocultar botones o proteger rutas React.
+Se mantienen .NET 9 / SDK 9.0.318, EF Core 9, PostgreSQL, Identity + JWT y JSONB.
+El frontend conserva React, TypeScript, Vite, TanStack Query, React Hook Form y Zod.
+Se mantienen Domain, Application, Infrastructure y Api.
+No se añaden CQRS, MediatR ni repositorios genéricos.
 
-La lógica de reglas permanece en Domain.
-Los contratos y resultados de casos de uso permanecen en Application.
-La persistencia y las transacciones permanecen en Infrastructure.
-No se añade MediatR, CQRS ni un repositorio genérico.
+## 2. Alcance
 
-### 3.2 DTO y límites de integración
+**Incluye:** listado privado, búsqueda por título, filtro por nivel, creación, consulta, edición de metadatos, guardado explícito, duplicación completa y papelera con restauración.
+Se incluye borrado definitivo sencillo desde papelera, aprovechando la cascada existente.
+
+**Límite con SPEC 02:** las actividades se pueden leer y copiar como unidades existentes.
+No se exponen acciones para crearlas, modificarlas, eliminarlas individualmente ni reordenarlas.
+Crear las filas de una copia y eliminarlas por cascada al borrar su clase son las únicas excepciones.
+Los controles de actividades y las nuevas reglas de duración pertenecen exclusivamente a SPEC 02.
+
+## 3. Reglas funcionales
+
+### Seguridad obligatoria
+
+- Todas las operaciones requieren JWT; el profesor se obtiene del claim sub validado.
+- El cliente nunca envía ni selecciona UserId.
+- Cada lectura y modificación verifica el propietario en el servidor, también en papelera y duplicación.
+- Una clase ajena devuelve 404, sin revelar su título, contenido o estado.
+- Se usan DTO acotados, no entidades enlazadas directamente al JSON.
+- Datos fuera del DTO no pueden modificar propietario, fechas, estado ni actividades.
+- Las rutas protegidas de React no sustituyen la autorización del backend.
+
+### Listado activo
+
+- Devuelve todas las coincidencias propias, sin paginación.
+- Orden: UpdatedAt DESC, con Id como desempate estable.
+- Muestra título, nivel y tema, con acciones Editar, Duplicar y Enviar a papelera.
+- La búsqueda es parcial por título, sin distinguir mayúsculas y recortando espacios exteriores.
+- Los caracteres especiales de patrones SQL se interpretan literalmente.
+- Se combina con el nivel A2, B1 o B2; filtros vacíos significan sin restricción.
+- No se añade búsqueda en contenido ni normalización especial de acentos.
+- Búsqueda y nivel pueden mantenerse como estado local, sin sincronización con URL.
+
+### Crear y editar
+
+| Campo | Validación en frontend y backend |
+| --- | --- |
+| Title | Obligatorio, máximo 200 caracteres |
+| Topic | Obligatorio, máximo 200 caracteres |
+| Objective | Obligatorio, máximo 2000 caracteres |
+| Level | Obligatorio; A2, B1 o B2 |
+
+Los textos se recortan y no pueden quedar vacíos o contener únicamente espacios.
+Los títulos no necesitan ser únicos.
+Una Lesson puede existir sin Activities.
+
+Crear genera Id y fechas UTC del servidor y abre el editor de la clase creada.
+Guardar modifica solo los cuatro campos y UpdatedAt.
+Conserva CreatedAt, UserId, EstimatedDuration y todas las Activities.
+No se muestran controles de actividades o duración.
+
+Se acepta **last write wins** sobre metadatos.
+No se comparan versiones ni se detectan conflictos entre pestañas.
+Esta simplificación no autoriza acceder a clases ajenas ni restaurar desde PUT.
+
+### Duplicación completa
+
+- Copia la clase activa persistida, no cambios locales pendientes.
+- Genera nuevo Lesson Id y fechas, con el mismo propietario.
+- Usa “Título original (copia)”; recorta el título base si necesita respetar los 200 caracteres.
+- Conserva nivel, tema, objetivo y EstimatedDuration de la clase.
+- Copia todas las actividades con nuevos Id y el LessonId de la copia.
+- Conserva Type, Title, Instructions, Content JSONB, Order y EstimatedDuration.
+- Conserva duraciones null existentes sin inventar valores.
+- La copia queda activa e independiente y puede no tener actividades.
+- La lectura coherente del conjunto y su inserción se realizan en una transacción.
+- Un fallo revierte toda la copia, sin filas parciales.
+- Tras éxito se abre el editor de la copia.
+- No se reintenta automáticamente el POST si su resultado de red es incierto.
+
+### Papelera mínima
+
+DeletedAt null significa activa; DeletedAt distinto de null significa en papelera.
+
+- Enviar a papelera requiere confirmación y conserva Lesson y Activities.
+- La papelera lista únicamente clases eliminadas del profesor.
+- No tiene buscador, filtros ni paginación propios.
+- Orden: DeletedAt DESC, con Id como desempate.
+- Restaurar requiere confirmación, limpia DeletedAt y actualiza UpdatedAt.
+- Restaurar conserva los Id y todos los datos.
+- Las clases en papelera no se editan ni se duplican.
+- No hay caducidad, limpieza automática, tareas programadas ni operaciones masivas.
+
+**Borrado definitivo:** AppDbContext ya configura cascada de Lesson a Activities.
+Se incluye una operación DELETE directa sobre una clase propia en papelera, sin crear infraestructura adicional.
+El endpoint no existe todavía: se especifica su futura implementación sencilla sobre esa cascada.
+La interfaz exige confirmación que advierta de la pérdida de la clase y todas sus actividades.
+
+### Guardado, cambios pendientes y fallos
+
+- Guardar es explícito y usa el estado de formulario modificado de React Hook Form.
+- La navegación controlada desde el editor pide confirmación antes de descartar cambios.
+- beforeunload puede advertir al cerrar o recargar, cuando el navegador lo permita.
+- No se exige migrar BrowserRouter ni interceptar todos los mecanismos de navegación.
+- No se crea un gestor de borradores ni se guarda contenido en localStorage.
+- Los errores de guardado conservan los campos; un refetch no reemplaza un formulario modificado.
+- Se muestra éxito o se retiran elementos de la lista únicamente tras respuesta correcta.
+- Los botones de acciones se deshabilitan durante su solicitud.
+
+## 4. Modelo de datos
+
+La única ampliación persistente obligatoria es:
+
+```csharp
+// Lesson
+public DateTimeOffset? DeletedAt { get; private set; }
+```
+
+La migración AddLessonSoftDelete deja las clases existentes con DeletedAt = null.
+Conserva sus datos, actividades, relaciones, JSONB e índices actuales.
+No añade Lesson.Version, tokens de concurrencia ni una tabla de papelera.
+No exige nuevos índices para el volumen inicial.
+El soft delete no ejecuta la cascada; solo la ejecuta el borrado definitivo.
+
+Domain conserva las reglas y la copia independiente.
+Application define contratos específicos de lecciones.
+Infrastructure utiliza AppDbContext para consultas, escrituras y transacciones.
+Api obtiene el usuario autenticado y transforma los resultados a HTTP.
+
+## 5. DTO necesarios
 
 Definir en backend/Application/Lessons/LessonDtos.cs:
 
-- LessonListItemDto: Id, Title, Level, Topic, ActivityCount, UpdatedAt, DeletedAt y Version.
-- LessonPageDto: Items, Page, PageSize fijo a 20 y TotalCount.
-- LessonDetailsDto: metadatos, fechas, Version y Activities de solo lectura en SPEC 01.
-- SaveLessonRequest: Title, Level, Topic y Objective.
-- LessonActivityDto: Id, Type, Title, Instructions, Content, Order y EstimatedDuration.
+| DTO | Campos |
+| --- | --- |
+| SaveLessonRequest | Title, Level, Topic, Objective |
+| LessonListItemDto | Id, Title, Level, Topic, UpdatedAt, DeletedAt |
+| LessonDetailsDto | Id, Title, Level, Topic, Objective, EstimatedDuration, CreatedAt, UpdatedAt, DeletedAt, Activities |
+| LessonActivityDto | Id, Type, Title, Instructions, Content, Order, EstimatedDuration |
 
-Content conserva los contratos tipados existentes.
-El frontend nunca edita JSON arbitrario.
-SPEC 02 amplía estos DTO con transición, duración calculada y actividades editables.
+El listado devuelve un array, sin LessonPageDto, Page, PageSize o TotalCount.
+SaveLessonRequest se reutiliza para crear y editar; no incluye UserId, Activities, DeletedAt ni duración.
+Las actividades del detalle son de solo lectura y no se reenvían al guardar.
+Content conserva su formato existente y nunca se interpreta como HTML ejecutable.
 
-Mantener ILessonReader.FindOwnedAsync para no romper consumidores existentes.
-Extender el lector con listado y detalle por propietario.
-Declarar ILessonService para crear, actualizar, duplicar, archivar, restaurar y eliminar.
-Su implementación usa AppDbContext y los métodos de Domain, siguiendo el patrón simple actual.
-Los resultados de Application no deben contener IResult ni depender de ASP.NET.
+Mantener ILessonReader.FindOwnedAsync y añadir únicamente listado y detalle privados.
+Declarar ILessonService para las escrituras de clases, siguiendo el patrón específico actual.
+No devolver IResult desde Application ni añadir abstracciones genéricas de persistencia.
 
-### 3.3 API
+## 6. Endpoints
 
-Todas las rutas siguientes requieren JWT:
+Todos requieren autenticación.
 
 | Método y ruta | Función | Éxito |
 | --- | --- | --- |
-| GET /api/lessons?page=1&search=&level=&state=active | Listado privado | 200 |
-| GET /api/lessons/{id} | Detalle activo | 200 + ETag |
-| POST /api/lessons | Crear | 201 + Location + ETag |
-| PUT /api/lessons/{id} | Guardar metadatos | 200 + ETag nuevo |
-| POST /api/lessons/{id}/duplicate | Copiar versión guardada | 201 + Location + ETag |
+| GET /api/lessons | Listado activo o papelera | 200 + array |
+| GET /api/lessons/{id} | Detalle activo propio | 200 + detalle |
+| POST /api/lessons | Crear sin actividades | 201 + detalle y Location |
+| PUT /api/lessons/{id} | Guardar metadatos | 200 + detalle |
+| POST /api/lessons/{id}/duplicate | Copiar clase activa persistida | 201 + detalle y Location |
 | POST /api/lessons/{id}/trash | Enviar a papelera | 204 |
-| POST /api/lessons/{id}/restore | Restaurar | 200 + ETag nuevo |
-| DELETE /api/lessons/{id} | Eliminar definitivamente de papelera | 204 |
+| POST /api/lessons/{id}/restore | Restaurar | 204 |
+| DELETE /api/lessons/{id} | Borrar definitivamente desde papelera | 204 |
 
-- state admite únicamente active o trash.
-- search tiene un máximo de 200 caracteres.
-- page menor que 1 y filtros inválidos devuelven 400.
-- ETag contiene Version como valor fuerte entre comillas.
-- Todas las mutaciones sobre una clase existente exigen If-Match con una versión concreta.
-- If-Match ausente devuelve 428; formato inválido devuelve 400.
-- Una versión obsoleta devuelve 412 con ProblemDetails.
-- Una transición de estado incompatible devuelve 409.
-- Sin sesión se devuelve 401.
-- Id inexistente o perteneciente a otro usuario devuelve 404.
-- No revelar el estado ni la existencia de clases ajenas.
-- Errores de campos devuelven ValidationProblemDetails con nombres de campo.
-- Ampliar CORS a PUT y DELETE y permitir If-Match.
-- Exponer ETag y Location al origen autorizado.
-- No ampliar los orígenes permitidos ni alterar el flujo Identity/JWT.
-- Los endpoints de clases usan Authorization Bearer, no el refresh token como credencial.
-- El cliente puede renovar una vez tras 401; no debe reintentar errores de red ambiguos.
+**Listado:** admite state=active|trash, search y level.
+state es active por defecto.
+search es opcional y tiene un máximo de 200 caracteres.
+level es opcional y admite A2, B1 o B2.
+En modo trash se devuelve la lista completa; search y level no se aplican ni se envían desde su interfaz.
+No hay parámetros de paginación.
 
-## 4. Archivos previstos
+**Errores:**
 
-Las rutas nuevas siguientes son la estructura propuesta por este borrador.
+- 400: validación, estado solicitado o filtros activos incorrectos.
+- 401: usuario no autenticado.
+- 404: recurso inexistente o ajeno; también clase en papelera consultada para editar o duplicar.
+- 409: solamente transición inválida de una clase propia: archivar una eliminada, restaurar una activa o borrar definitivamente una activa.
+- Usar ProblemDetails y ValidationProblemDetails.
 
-**Modificar:**
+No usar ETag, If-Match, 412 ni 428.
+Mantener los orígenes CORS actuales y permitir PUT y DELETE cuando sea necesario.
+Reutilizar Authorization Bearer y la renovación acotada existente.
+No introducir infraestructura de concurrencia ni reintentos automáticos de escrituras inciertas.
 
-- backend/Domain/Lesson.cs — metadatos, duplicación, papelera y versión.
-- backend/Domain/Activity.cs — copia independiente con nuevo identificador.
-- backend/Application/Contracts.cs — extender ILessonReader sin retirar su operación existente.
-- backend/Infrastructure/AppDbContext.cs — campos, índice y concurrencia.
-- backend/Infrastructure/LessonReader.cs — consultas privadas, filtros y paginación.
-- backend/Infrastructure/Migrations/AppDbContextModelSnapshot.cs — modelo generado por EF.
-- backend/Api/Program.cs — registro del servicio, endpoints y CORS.
-- frontend/src/auth.ts — exponer transporte autenticado con renovación acotada.
-- frontend/src/App.tsx — sustituir el placeholder por las rutas de clases.
-- frontend/src/main.tsx — router de datos compatible con bloqueo de navegación.
-- frontend/src/styles.css — listado, formularios, papelera y avisos.
-- frontend/src/App.test.tsx — actualizar expectativas de la pantalla privada.
-- tests/Domain.Tests/LessonTests.cs — ampliar comportamiento sin perder pruebas anteriores.
-- README.md — reflejar .NET 9 y documentar la entrega al implementarla.
+## 7. Pantallas y estados frontend
 
-**Crear:**
-
-- backend/Application/Lessons/LessonDtos.cs.
-- backend/Application/Lessons/ILessonService.cs.
-- backend/Infrastructure/LessonService.cs.
-- backend/Api/LessonEndpoints.cs.
-- backend/Infrastructure/Migrations/<timestamp>_AddLessonTrashAndVersion.cs y su Designer.
-- frontend/src/lessons/lesson-api.ts.
-- frontend/src/lessons/lesson-schema.ts.
-- frontend/src/lessons/LessonsPage.tsx.
-- frontend/src/lessons/LessonEditorPage.tsx.
-- frontend/src/lessons/UnsavedChangesGuard.tsx.
-- frontend/src/lessons/LessonsPage.test.tsx.
-- frontend/src/lessons/LessonEditorPage.test.tsx.
-- tests/Integration.Tests/LessonManagementTests.cs.
-- frontend/e2e/lessons.spec.ts.
-
-Las rutas de interfaz son /, /lessons/trash, /lessons/new y /lessons/:id/edit.
-La página de listado se reutiliza en modo activo y papelera.
-No se crea una biblioteca genérica de componentes ni un nuevo sistema de diseño.
-
-## 5. Plan de implementación
-
-Cada paso es una unidad compilable y verificable.
-Separar los cambios manuales que excedan aproximadamente 30–50 líneas en subpasos compilables.
-Los archivos de migración generados no se dividen manualmente.
-No publicar endpoints que solo tengan implementaciones simuladas.
-
-1. Añadir Version y las reglas de edición de metadatos a Lesson, con pruebas unitarias focalizadas.
-2. Añadir DeletedAt y las transiciones a papelera/restauración, con pruebas de estado.
-3. Añadir copia independiente en Lesson y Activity, con pruebas de identidad y contenido.
-4. Configurar campos, índice y token de concurrencia en AppDbContext.
-5. Generar AddLessonTrashAndVersion y comprobar actualización de una base con datos previos.
-6. Definir DTO de listado, detalle y guardado, conservando contratos existentes.
-7. Implementar listado privado paginado en LessonReader y probar filtros con dos usuarios.
-8. Exponer GET de listado y actualizar CORS únicamente para los métodos y cabeceras previstos.
-9. Implementar detalle privado y exponerlo con ETag.
-10. Implementar creación y registrar POST solo cuando el caso de uso y su prueba estén completos.
-11. Implementar actualización de metadatos con If-Match y rechazo de conflictos.
-12. Implementar copia transaccional del conjunto y su endpoint.
-13. Implementar envío a papelera con versión y autorización.
-14. Implementar restauración con versión y autorización.
-15. Implementar borrado definitivo limitado a la papelera.
-16. Añadir el transporte autenticado para clases, sin cambiar cómo se almacenan los tokens.
-17. Integrar listado activo con carga, vacío y error.
-18. Incorporar búsqueda, nivel y paginación sincronizados con URL.
-19. Añadir formulario de creación con validaciones y navegación al resultado.
-20. Conectar edición de metadatos con carga de detalle, ETag y confirmación de guardado.
-21. Incorporar bloqueo de navegación y presentación del conflicto sin perder el formulario.
-22. Conectar duplicación y apertura de la copia.
-23. Conectar papelera, restauración y confirmaciones de eliminación.
-24. Actualizar la documentación de uso de esta entrega y sus limitaciones respecto a SPEC 02.
-
-Cada operación incorpora su prueba de dominio, integración o componente en su mismo paso.
-Extender el E2E de gestión a medida que se conecten acciones.
-El último paso no sustituye los criterios de aceptación.
-
-## 6. Criterios de aceptación
-
-- [ ] Un usuario sin JWT no puede acceder a ningún endpoint de clases.
-- [ ] Un profesor no puede listar, leer, modificar, copiar, restaurar ni borrar clases ajenas.
-- [ ] Con 21 coincidencias se muestran 20 en la primera página y una en la segunda.
-- [ ] Búsqueda y filtro de nivel se combinan y afectan al conteo.
-- [ ] El orden de resultados es estable para clases con la misma fecha.
-- [ ] Cambiar un filtro reinicia la página; volver con el navegador restaura los parámetros.
-- [ ] Crear con título, nivel, tema y objetivo válidos funciona sin actividades.
-- [ ] Un campo obligatorio vacío o un nivel distinto de A2/B1/B2 se rechaza en cliente y servidor.
-- [ ] Guardar metadatos no borra ni cambia actividades existentes.
-- [ ] Duplicar conserva contenido, duraciones y orden, pero genera Id nuevos.
-- [ ] Modificar la copia no altera la clase original.
-- [ ] Un fallo durante la copia no deja una clase parcialmente duplicada.
-- [ ] Archivar retira del listado activo sin borrar actividades.
-- [ ] Restaurar conserva todos los Id y datos.
-- [ ] Eliminar definitivamente exige clase en papelera, propiedad y confirmación de interfaz.
-- [ ] La papelera no se vacía automáticamente por antigüedad.
-- [ ] Dos actualizaciones con la misma versión no sobrescriben ambas: solo una tiene éxito.
-- [ ] Un conflicto o error de red conserva el formulario local.
-- [ ] Una clase archivada desde otra pestaña no se puede guardar como activa.
-- [ ] Salir del editor con cambios pendientes requiere confirmar descarte.
-- [ ] Cancelar una confirmación no cambia el servidor.
-- [ ] Las operaciones deshabilitan su botón durante el envío.
-- [ ] La migración conserva datos anteriores y asigna versiones válidas.
-- [ ] Registro, login, renovación y logout existentes siguen funcionando.
-
-**Comprobaciones ejecutables al implementar:**
-
-- dotnet restore y dotnet build desde la raíz, con SDK 9.0.318.
-- ./scripts/Test.ps1 con PostgreSQL real y bases aisladas.
-- ./scripts/Test-E2E.ps1 con flujos de gestión añadidos.
-- Revisión manual de lista, filtros y papelera con teclado y pantalla estrecha.
-
-Estas comprobaciones son requisitos futuros; no se han ejecutado durante la redacción.
-
-## 7. Decisiones tomadas y descartadas
-
-**Confirmadas por el usuario:**
-
-- Dos especificaciones para separar gestión y edición de actividades.
-- Búsqueda por título, filtro por nivel y 20 clases por página.
-- Papelera sin eliminación automática, en lugar de borrar directamente.
-- Copia completa guardada y apertura de la copia, sin pedir título antes.
-- Guardado explícito y advertencia de cambios pendientes.
-- Detectar conflictos en lugar de aceptar silenciosamente el último guardado.
-
-**Diseño técnico propuesto para revisión en este borrador:**
-
-- ETag/If-Match y token Version para hacer verificable la concurrencia.
-- Borrado lógico con DeletedAt, sin tabla ni servicio separado de papelera.
-- DTO y servicio de lecciones específicos, sin repositorios genéricos.
-- Extensión del cliente autenticado existente, sin segunda estrategia de sesión.
-- Mantener los contratos de actividades hasta su ampliación en SPEC 02.
-
-## 8. Riesgos y mitigaciones
-
-| Riesgo | Mitigación |
+| Ruta | Pantalla |
 | --- | --- |
-| Acceso a clases ajenas mediante Id | Predicado por propietario en todas las lecturas y escrituras, también papelera |
-| Refetch que borra cambios locales | No rehidratar formularios sucios; conflicto explícito |
-| Duplicado parcial o mezclado con un guardado simultáneo | Copia de una instantánea consistente dentro de una transacción |
-| Repetición de POST tras respuesta perdida | No reintentar automáticamente; permitir comprobar listado |
-| Confusión entre papelera y borrado definitivo | Acciones separadas y confirmación con título |
-| Acumulación de clases en papelera | Eliminación manual explícita; sin caducidad no autorizada |
-| La fase 1 usa BrowserRouter sin bloqueo de navegación | Migración mínima a router de datos, conservando rutas y autenticación |
-| Guía antigua menciona .NET 10 | La implementación mantiene .NET 9 y corrige la referencia al documentar |
+| / | Mis clases, búsqueda, nivel y acciones |
+| /lessons/new | Crear clase |
+| /lessons/:id/edit | Editar metadatos |
+| /lessons/trash | Papelera con restauración y borrado definitivo |
 
-## 9. Qué NO se hará en esta especificación
+Reutilizar las rutas protegidas y la sesión.
+Un mismo formulario sirve para creación y edición.
+El listado puede reutilizarse en papelera ocultando filtros y acciones no aplicables.
+Las claves de TanStack Query incluyen usuario, estado y filtros efectivos.
+Tras éxito se invalidan las consultas afectadas, sin actualizaciones optimistas con rollback o versiones.
+No se crea una biblioteca de componentes ni otro sistema de diseño.
 
-No se implementan formularios ni ordenamiento de actividades.
-No se implementan player, IA, publicación, exportación ni colaboración en tiempo real.
-No se añade una papelera de actividades independiente.
-No se añade historial, autoguardado o recuperación offline.
-No se cambia el framework, la arquitectura ni el mecanismo de autenticación.
+**Estados:** Loading, Error, Empty, Success y Saving.
+Mostrar “Aún no tienes clases.” sin filtros y “No hay clases que coincidan con estos filtros.” cuando corresponde.
+La papelera vacía muestra “La papelera está vacía.”.
+Los errores ofrecen mensaje y reintento apropiado; Saving deshabilita el botón correspondiente.
+
+## 8. Archivos previstos
+
+Las siguientes modificaciones pertenecen a la futura implementación, no a esta revisión.
+
+| Área | Archivos |
+| --- | --- |
+| Dominio | Modificar backend/Domain/Lesson.cs y Activity.cs; esta última solo para copia independiente |
+| Contratos | Modificar backend/Application/Contracts.cs; crear backend/Application/Lessons/LessonDtos.cs e ILessonService.cs |
+| Persistencia | Modificar backend/Infrastructure/AppDbContext.cs y LessonReader.cs; crear LessonService.cs en esa misma carpeta |
+| Migración | Crear backend/Infrastructure/Migrations/<timestamp>_AddLessonSoftDelete.cs y Designer; actualizar AppDbContextModelSnapshot.cs |
+| API | Modificar backend/Api/Program.cs; crear backend/Api/LessonEndpoints.cs |
+| Integración frontend | Modificar frontend/src/auth.ts, App.tsx y styles.css |
+| Lecciones frontend | Crear frontend/src/lessons/lesson-api.ts, lesson-schema.ts, LessonsPage.tsx y LessonEditorPage.tsx |
+| Pruebas existentes | Adaptar tests/Domain.Tests/LessonTests.cs y frontend/src/App.test.tsx |
+| Pruebas nuevas | Crear tests/Integration.Tests/LessonManagementTests.cs, frontend/src/lessons/LessonsPage.test.tsx, LessonEditorPage.test.tsx y frontend/e2e/lessons.spec.ts |
+
+No se requiere modificar main.tsx ni crear UnsavedChangesGuard global.
+No se cambian paquetes, SDK, arquitectura ni estrategia de autenticación.
+
+## 9. Plan simplificado: 10 etapas verificables
+
+Cada etapa mantiene la aplicación compilable e incorpora las pruebas del comportamiento añadido.
+No se publican endpoints simulados ni se pospone toda la validación al final.
+
+| Etapa | Entrega | Verificación |
+| --- | --- | --- |
+| 1 | Reglas de metadatos, soft delete/restauración y copia independiente en dominio | Validación, conservación de actividades e Id nuevos en copias |
+| 2 | Mapeo DeletedAt y migración AddLessonSoftDelete | Migrar datos anteriores sin perder clases o actividades |
+| 3 | DTO, consultas y endpoints de listado/detalle | Dos usuarios, búsqueda/nivel, orden y 404 ajenos |
+| 4 | Crear y actualizar solo metadatos | Clase sin actividades, datos inválidos y PUT que conserva Activities |
+| 5 | Duplicación transaccional | Copia completa independiente y reversión ante fallo provocado |
+| 6 | Trash, restore y DELETE con cascada existente | Conservación, recuperación, eliminación definitiva y estados inválidos |
+| 7 | Mis clases con transporte autenticado y filtros locales | Loading/Error/Empty, búsqueda y nivel sin paginación |
+| 8 | Formularios de creación/edición y Guardar | Validación, persistencia tras recargar y aviso sencillo de descarte |
+| 9 | Duplicar desde listado y abrir la copia | E2E y botón deshabilitado durante solicitud |
+| 10 | Papelera, restauración y confirmaciones; cierre del flujo y documentación de uso | E2E login → crear → editar → duplicar → papelera → restaurar y borrado definitivo |
+
+Las pruebas de integración usan PostgreSQL real y bases aisladas.
+El E2E se amplía con cada pantalla conectada.
+No se exigen pruebas específicas de concurrencia, paginación o filtros en URL.
+
+## 10. Criterios de aceptación
+
+- [ ] Sin sesión se rechazan todos los endpoints de clases.
+- [ ] Cada profesor solo lista y consulta sus clases activas o eliminadas.
+- [ ] No puede modificar, copiar, archivar, restaurar ni borrar clases ajenas; recibe 404.
+- [ ] El cliente no puede asignar o cambiar UserId.
+- [ ] El listado devuelve todas las coincidencias propias por UpdatedAt DESC.
+- [ ] Búsqueda por título y nivel se combinan correctamente.
+- [ ] Crear con datos válidos funciona sin Activities.
+- [ ] Campos obligatorios, longitudes y niveles se validan en frontend y backend.
+- [ ] Editar metadatos conserva exactamente las actividades persistidas.
+- [ ] Crear y guardar no requieren versiones ni cabeceras de concurrencia.
+- [ ] Duplicar conserva datos y orden con nuevos Id de clase y actividades.
+- [ ] La copia es independiente y se abre después del éxito.
+- [ ] Un fallo durante duplicación no deja filas parciales.
+- [ ] Soft delete conserva Lesson y Activities y las retira del listado activo.
+- [ ] Restaurar conserva los Id y devuelve la clase a Mis clases.
+- [ ] Borrado definitivo exige clase propia en papelera y confirmación de interfaz.
+- [ ] La cascada elimina sus Activities sin afectar a otras clases.
+- [ ] Cancelar una confirmación no cambia datos; una transición inválida devuelve 409.
+- [ ] Se distinguen vacío inicial, resultados filtrados vacíos y papelera vacía.
+- [ ] Los botones se deshabilitan durante su acción; un error conserva el formulario.
+- [ ] La navegación controlada desde el editor advierte de cambios pendientes.
+- [ ] La migración conserva los datos anteriores y deja las clases existentes activas.
+- [ ] Registro, login, refresh y logout existentes siguen funcionando.
+- [ ] No hay controles ni endpoints de edición individual de actividades.
+
+Al implementar se ejecutarán dotnet restore, dotnet build, ./scripts/Test.ps1 y ./scripts/Test-E2E.ps1.
+Se conservan las pruebas importantes de seguridad y persistencia.
+No se ejecutan pruebas de aplicación durante esta revisión documental.
+
+## 11. Decisiones y funcionalidades pospuestas
+
+**Se mantiene:** aislamiento JWT por usuario, validaciones, copia transaccional, soft delete y restauración.
+Son requisitos de seguridad e integridad del flujo mínimo.
+
+**Se simplifica:** last write wins, listado completo, filtros locales y avisos de descarte sencillos.
+Estas decisiones sustituyen las de paginación y concurrencia de la revisión anterior.
+
+**Pospuesto:**
+
+- Lesson.Version, ETag, If-Match, 412/428 y actualización optimista basada en versiones.
+- Detección y resolución de conflictos, recarga de versión guardada y manejo especial entre pestañas.
+- Paginación, page, pageSize, TotalCount y navegación entre páginas.
+- Sincronización de filtros con URL.
+- Búsqueda avanzada de papelera, operaciones masivas y limpieza automática.
+- Infraestructura general de recuperación de borradores.
+
+**Fuera de SPEC 01:** editor de actividades y tiempos (SPEC 02), Lesson Player, IA, plantillas, biblioteca de actividades, estudiantes, cursos y compartir clases.
+También quedan fuera autoguardado, offline, historial y colaboración en tiempo real.
+
+**Dependencia documental:** SPEC 02 aún presupone Version y ETag/If-Match de la revisión anterior.
+Esas referencias deben revisarse antes de implementarla.
+Esta tarea no modifica SPEC 02 ni decide reintroducir concurrencia avanzada en ella.
+
+## 12. Riesgos principales
+
+| Riesgo | Tratamiento MVP |
+| --- | --- |
+| Acceso mediante un Id ajeno | Verificar propietario en cada operación, también papelera y copia |
+| Sobrescritura desde otra pestaña | Aceptar last write wins y documentar el límite |
+| Listado demasiado grande | Incorporar paginación posteriormente si el volumen lo exige |
+| Copia parcial o incoherente | Lectura y escritura del conjunto dentro de una transacción |
+| Repetición de POST tras fallo de red | Deshabilitar botón y no reintentar automáticamente escrituras inciertas |
+| Borrado definitivo accidental | Exigir papelera y confirmación con el título |
+| Pérdida del formulario al salir | Aviso en navegación controlada y beforeunload, sin prometer recuperación |
+| PUT o refetch altera datos no deseados | DTO acotado, actualización selectiva y no reemplazar un formulario modificado |
+| SPEC 02 depende de contratos retirados | Señalar la incompatibilidad y revisar esa especificación por separado |
+
+No se implementan funciones ni se modifican archivos de código en esta tarea.
+La especificación permanece en Borrador para revisión del usuario.
