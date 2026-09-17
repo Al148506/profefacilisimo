@@ -1,0 +1,16 @@
+.tools/
+.codegraph/
+.env
+.env.*
+!.env.example
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/coverage/
+**/test-results/
+**/playwright-report/
+.vs/
+*.user
+*.log
+*.tsbuildinfo

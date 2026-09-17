@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Application/Application.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.20" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.20" PrivateAssets="all" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+  </ItemGroup>
+</Project>
+
