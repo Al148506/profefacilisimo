@@ -38,6 +38,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             entity.Property(x => x.Topic).HasMaxLength(200);
             entity.Property(x => x.Objective).HasMaxLength(2000);
             entity.Property(x => x.Level).HasConversion<string>().HasMaxLength(2);
+            entity.Property(x => x.DeletedAt).HasColumnType("timestamp with time zone").IsRequired(false);
             entity.HasIndex(x => new { x.UserId, x.UpdatedAt });
             entity.HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             entity.HasMany(x => x.Activities).WithOne().HasForeignKey(x => x.LessonId).OnDelete(DeleteBehavior.Cascade);
