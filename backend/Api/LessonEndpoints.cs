@@ -1,3 +1,4 @@
+using Profefacilisimo.Application.Lessons;
 using System.Security.Claims;
 using Profefacilisimo.Application;
 using Profefacilisimo.Domain;
@@ -11,6 +12,8 @@ public static class LessonEndpoints
         var lessons = app.MapGroup("/api/lessons").RequireAuthorization();
         lessons.MapGet("", List);
         lessons.MapGet("/{id:guid}", Details);
+        lessons.MapPost("", Create);
+        lessons.MapPut("/{id:guid}", Update);
     }
 
     private static async Task<IResult> List(ClaimsPrincipal principal, ILessonReader reader,
@@ -44,5 +47,25 @@ public static class LessonEndpoints
             return Results.Unauthorized();
         var lesson = await reader.GetOwnedDetailsAsync(id, userId, ct);
         return lesson is null ? Results.Problem(statusCode: 404, title: "Clase no encontrada.") : Results.Ok(lesson);
+    }
+
+    private static async Task<IResult> Create(SaveLessonRequest request, ClaimsPrincipal principal, ILessonService service, CancellationToken ct)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
+            return Results.Unauthorized();
+        var result = await service.CreateAsync(userId, request, ct);
+        if (result.Errors is not null) return Results.ValidationProblem(result.Errors);
+        return Results.Created($"/api/lessons/{result.Details!.Id}", result.Details);
+    }
+
+    private static async Task<IResult> Update(Guid id, SaveLessonRequest request, ClaimsPrincipal principal, ILessonService service, CancellationToken ct)
+    {
+        if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
+            return Results.Unauthorized();
+        var result = await service.UpdateAsync(id, userId, request, ct);
+        if (result.Errors is not null) return Results.ValidationProblem(result.Errors);
+        return result.Details is null
+            ? Results.Problem(statusCode: 404, title: "Clase no encontrada.")
+            : Results.Ok(result.Details);
     }
 }

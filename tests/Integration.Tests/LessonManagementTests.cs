@@ -197,4 +197,186 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.False(listJson[0].TryGetProperty("activities", out _));
         Assert.False(listJson[0].TryGetProperty("userId", out _));
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("invalid")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public async Task WritesRequireAuthenticatedValidSubject(string? sub)
+    {
+        using var client = Client(sub);
+        var body = new SaveLessonRequest("Título", "B1", "Tema", "Objetivo");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/lessons", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync($"/api/lessons/{Guid.NewGuid()}", body)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("A2")]
+    [InlineData("B1")]
+    [InlineData("B2")]
+    public async Task CreateTrimsMetadataIgnoresProtectedFieldsAndAllowsDuplicateTitles(string level)
+    {
+        var (owner, _) = await Seed();
+        using var client = Client(owner.ToString());
+        var start = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var payload = new
+        {
+            title = "  Nueva  ", level, topic = " Tema ", objective = " Objetivo ",
+            userId = Guid.NewGuid(), id = Guid.NewGuid(), deletedAt = start,
+            createdAt = start.AddYears(-1), updatedAt = start.AddYears(-1), estimatedDuration = 99,
+            activities = new[] { new { title = "Inyectada" } }
+        };
+        var response = await client.PostAsJsonAsync("/api/lessons", payload);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<LessonDetailsDto>())!;
+        Assert.Equal($"/api/lessons/{detail.Id}", response.Headers.Location!.OriginalString);
+        Assert.NotEqual(Guid.Empty, detail.Id);
+        Assert.NotEqual(payload.id, detail.Id);
+        Assert.Equal(("Nueva", level, "Tema", "Objetivo"), (detail.Title, detail.Level, detail.Topic, detail.Objective));
+        Assert.Empty(detail.Activities);
+        Assert.Null(detail.EstimatedDuration);
+        Assert.Null(detail.DeletedAt);
+        Assert.InRange(detail.CreatedAt, start, DateTimeOffset.UtcNow);
+        Assert.Equal(detail.CreatedAt, detail.UpdatedAt);
+        Assert.Equal(TimeSpan.Zero, detail.CreatedAt.Offset);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(response.Headers.Location)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/lessons", payload)).StatusCode);
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(owner, (await db.Lessons.SingleAsync(x => x.Id == detail.Id)).UserId);
+        Assert.Equal(2, await db.Lessons.CountAsync(x => x.UserId == owner));
+    }
+
+    public static IEnumerable<object?[]> InvalidSaveFields()
+    {
+        foreach (var field in new[] { "title", "topic", "objective" })
+        foreach (var value in new string?[] { null, "", "   ", new('x', field == "objective" ? 2001 : 201) })
+            yield return [field, value];
+        foreach (var value in new string?[] { null, "", "B3", "b1", "0" })
+            yield return ["level", value];
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidSaveFields))]
+    public async Task InvalidSaveReturnsValidationProblemAndDoesNotMutate(string field, string? value)
+    {
+        var (owner, lessons) = await Seed("Original");
+        using var client = Client(owner.ToString());
+        var body = new Dictionary<string, string?> { ["title"] = "Cambio", ["level"] = "A2", ["topic"] = "Tema", ["objective"] = "Objetivo" };
+        body[field] = value;
+        foreach (var response in new[]
+        {
+            await client.PostAsJsonAsync("/api/lessons", body),
+            await client.PutAsJsonAsync($"/api/lessons/{lessons[0].Id}", body)
+        })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+            var problem = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            Assert.True(problem.GetProperty("errors").TryGetProperty(field, out _));
+        }
+        var detail = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{lessons[0].Id}"))!;
+        Assert.Equal("Original", detail.Title);
+        Assert.Equal("B1", detail.Level);
+        Assert.Single(await List(client));
+    }
+
+    [Fact]
+    public async Task MissingFieldsRejectedAndExactLimitsAccepted()
+    {
+        var (owner, _) = await Seed();
+        using var client = Client(owner.ToString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/lessons", new { })).StatusCode);
+        var body = new SaveLessonRequest(new string('t', 200), "A2", new string('t', 200), new string('o', 2000));
+        var response = await client.PostAsJsonAsync("/api/lessons", body);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<LessonDetailsDto>())!;
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/lessons/{detail.Id}", body)).StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateOnlyChangesMetadataAndPreservesStoredActivitiesExactly()
+    {
+        var (owner, _) = await Seed();
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var lesson = new Lesson(owner, "Anterior", LessonLevel.B1, "Tema", "Objetivo", 60);
+        lesson.AddActivity("Una", "Instrucciones", new WritingContent("Texto"));
+        lesson.AddActivity("Dos", "Instrucciones", new ReadingContent("Lectura", ["Pregunta"]), 15);
+        db.Lessons.Add(lesson);
+        await db.SaveChangesAsync();
+        var before = await db.Database.SqlQueryRaw<string>("""
+            SELECT to_jsonb(a)::text AS "Value" FROM "Activities" a ORDER BY a."Id"
+            """).ToArrayAsync();
+        var createdAt = (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == lesson.Id)).CreatedAt;
+        using var client = Client(owner.ToString());
+        var start = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var response = await client.PutAsJsonAsync($"/api/lessons/{lesson.Id}", new
+        {
+            title = " Actualizada ", level = "B2", topic = " Nuevo tema ", objective = " Nuevo objetivo ",
+            userId = Guid.NewGuid(), id = Guid.NewGuid(), estimatedDuration = 999,
+            createdAt = start.AddYears(-1), updatedAt = start.AddYears(-1), deletedAt = start,
+            activities = Array.Empty<object>()
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<LessonDetailsDto>())!;
+        Assert.Equal(("Actualizada", "B2", "Nuevo tema", "Nuevo objetivo"), (detail.Title, detail.Level, detail.Topic, detail.Objective));
+        Assert.Equal(lesson.Id, detail.Id);
+        Assert.Equal(createdAt, detail.CreatedAt);
+        Assert.InRange(detail.UpdatedAt, start, DateTimeOffset.UtcNow);
+        Assert.Equal(60, detail.EstimatedDuration);
+        Assert.Null(detail.DeletedAt);
+        Assert.Equal(2, detail.Activities.Count);
+        db.ChangeTracker.Clear();
+        Assert.Equal(owner, (await db.Lessons.SingleAsync(x => x.Id == lesson.Id)).UserId);
+        Assert.Equal(before, await db.Database.SqlQueryRaw<string>("""
+            SELECT to_jsonb(a)::text AS "Value" FROM "Activities" a ORDER BY a."Id"
+            """).ToArrayAsync());
+        // Last write wins, with no version headers or tokens.
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/lessons/{lesson.Id}",
+            new SaveLessonRequest("Última", "A2", "Tema", "Objetivo"))).StatusCode);
+        Assert.Equal("Última", (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{lesson.Id}"))!.Title);
+    }
+
+    [Fact]
+    public async Task UpdateReturns404ForForeignMissingOrTrashedLessonsWithoutRestoring()
+    {
+        var (owner, lessons) = await Seed("Papelera");
+        var (other, others) = await Seed("Privada");
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Lessons.Where(x => x.Id == lessons[0].Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.DeletedAt, DateTimeOffset.UtcNow));
+        using var client = Client(owner.ToString());
+        foreach (var id in new[] { lessons[0].Id, others[0].Id, Guid.NewGuid() })
+        {
+            var response = await client.PutAsJsonAsync($"/api/lessons/{id}", new SaveLessonRequest("Cambio", "B1", "Tema", "Objetivo"));
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
+        }
+        Assert.NotNull((await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == lessons[0].Id)).DeletedAt);
+        Assert.Equal("Privada", (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == others[0].Id)).Title);
+        using var otherClient = Client(other.ToString());
+        Assert.Equal(HttpStatusCode.NotFound, (await otherClient.PutAsJsonAsync($"/api/lessons/{lessons[0].Id}",
+            new SaveLessonRequest("Cambio", "B1", "Tema", "Objetivo"))).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("http://localhost:5173", true)]
+    [InlineData("https://evil.example", false)]
+    public async Task PutCorsKeepsExistingOriginRestriction(string origin, bool allowed)
+    {
+        using var client = fixture.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/lessons/" + Guid.NewGuid());
+        request.Headers.Add("Origin", origin);
+        request.Headers.Add("Access-Control-Request-Method", "PUT");
+        request.Headers.Add("Access-Control-Request-Headers", "authorization,content-type");
+        var response = await client.SendAsync(request);
+        Assert.Equal(allowed, response.Headers.Contains("Access-Control-Allow-Origin"));
+        if (allowed)
+        {
+            Assert.Equal(origin, response.Headers.GetValues("Access-Control-Allow-Origin").Single());
+            Assert.Contains("PUT", string.Join(",", response.Headers.GetValues("Access-Control-Allow-Methods")));
+        }
+    }
 }

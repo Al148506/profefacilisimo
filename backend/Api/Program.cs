@@ -1,3 +1,4 @@
+using Profefacilisimo.Application.Lessons;
 using Profefacilisimo.Api;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
@@ -37,6 +38,7 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 }).AddEntityFrameworkStores<AppDbContext>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ILessonReader, LessonReader>();
+builder.Services.AddScoped<ILessonService, LessonService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
     options.MapInboundClaims = false;
@@ -51,7 +53,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 builder.Services.AddAuthorization();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.WithOrigins(origin)
-    .WithMethods("GET", "POST").WithHeaders("Content-Type", "Authorization", "X-Requested-With").AllowCredentials()));
+    .WithMethods("GET", "POST", "PUT").WithHeaders("Content-Type", "Authorization", "X-Requested-With").AllowCredentials()));
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;

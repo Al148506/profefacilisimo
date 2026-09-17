@@ -37,7 +37,11 @@ public sealed class LessonReader(AppDbContext db) : ILessonReader
     {
         var lesson = await db.Lessons.AsNoTracking().Include(x => x.Activities)
             .SingleOrDefaultAsync(x => x.Id == lessonId && x.UserId == userId && x.DeletedAt == null, cancellationToken);
-        if (lesson is null) return null;
+        return lesson is null ? null : ToDetails(lesson);
+    }
+
+    internal static LessonDetailsDto ToDetails(Lesson lesson)
+    {
         var activities = lesson.Activities.OrderBy(x => x.Order).ThenBy(x => x.Id)
             .Select(x => new LessonActivityDto(x.Id, x.Type.ToString(), x.Title, x.Instructions,
                 ParseContent(x.Content), x.Order, x.EstimatedDuration)).ToArray();
