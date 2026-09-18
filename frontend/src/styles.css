@@ -52,3 +52,8 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid #c5d1
 .lesson-list a { display: inline-block; margin-top: 12px; overflow-wrap: anywhere; }
 .duplicate-button { margin: 12px 0 0 14px; }
 @media (max-width: 600px) { .duplicate-button { display: block; margin-left: 0; } }
+.lesson-navigation, .lesson-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.lesson-actions { margin-top: 16px; }
+.lesson-actions .duplicate-button, .lesson-actions a { margin: 0; }
+button.danger { background: #8c3033; border-color: #8c3033; }
+@media (max-width: 600px) { .lesson-actions { align-items: stretch; flex-direction: column; } }

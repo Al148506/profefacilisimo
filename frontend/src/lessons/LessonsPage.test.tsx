@@ -4,18 +4,18 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import LessonsPage from './LessonsPage';
-import { duplicateLesson, lessonListKey, listLessons } from './lesson-api';
+import { transitionLesson, duplicateLesson, lessonListKey, listLessons } from './lesson-api';
 import { logout } from '../auth';
 
 vi.mock('../auth', () => ({ getCurrentUser: vi.fn().mockResolvedValue({ id: 'u1' }), logout: vi.fn() }));
-vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), listLessons: vi.fn(), duplicateLesson: vi.fn() }));
+vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), listLessons: vi.fn(), duplicateLesson: vi.fn(), transitionLesson: vi.fn() }));
 const user = { id: 'u1', email: 'profe@example.com' };
 const lesson = { id: 'l1', title: 'Viajes', level: 'B1' as const, topic: 'Vacaciones', updatedAt: '2026-09-17', deletedAt: null };
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(listLessons).mockResolvedValue([]); });
 function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
-function page() {
+function page(trash = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  const result = render(<QueryClientProvider client={client}><MemoryRouter><Location /><LessonsPage user={user} /></MemoryRouter></QueryClientProvider>);
+  const result = render(<QueryClientProvider client={client}><MemoryRouter><Location /><LessonsPage user={user} trash={trash} /></MemoryRouter></QueryClientProvider>);
   return { ...result, client };
 }
 it('shows loading followed by initial empty state', async () => {
@@ -42,7 +42,7 @@ it('combines trimmed local filters and clears them without changing the URL', as
   expect(listLessons).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
   expect(await screen.findByText('No hay clases que coincidan con estos filtros.')).toBeInTheDocument();
-  expect(listLessons).toHaveBeenLastCalledWith({ search: 'viaje', level: 'B2' }, expect.any(AbortSignal));
+  expect(listLessons).toHaveBeenLastCalledWith({ search: 'viaje', level: 'B2' }, expect.any(AbortSignal), 'active');
   expect(window.location.href).toBe(url);
   await userEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
   expect(await screen.findByText('Aún no tienes clases.')).toBeInTheDocument();
@@ -106,4 +106,46 @@ it('does not retry uncertain duplication or navigate away on failure', async () 
   expect(screen.getByTestId('location')).toHaveTextContent('/');
   expect(screen.getByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Duplicar Viajes' })).toBeEnabled();
+});
+it('trash hides filters and editing, and shows its own empty state', async () => {
+  page(true);
+  expect(await screen.findByText('La papelera está vacía.')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Buscar por título')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Nivel')).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Crear clase' })).not.toBeInTheDocument();
+});
+it('cancelled confirmation never sends a trash request', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson]);
+  vi.spyOn(window, 'confirm').mockReturnValue(false);
+  page();
+  await userEvent.click(await screen.findByRole('button', { name: 'Enviar a papelera Viajes' }));
+  expect(transitionLesson).not.toHaveBeenCalled();
+  expect(screen.getByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
+});
+it('restores only after confirmation, disables actions and waits for success before removing rows', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson]);
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+  let resolve!: () => void;
+  vi.mocked(transitionLesson).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+  page(true);
+  await userEvent.click(await screen.findByRole('button', { name: 'Restaurar Viajes' }));
+  expect(screen.getByRole('button', { name: 'Restaurar Viajes' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Eliminar definitivamente Viajes' })).toBeDisabled();
+  expect(screen.getByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Duplicar Viajes' })).not.toBeInTheDocument();
+  vi.mocked(listLessons).mockResolvedValue([]);
+  resolve();
+  expect(await screen.findByText('La papelera está vacía.')).toBeInTheDocument();
+  expect(transitionLesson).toHaveBeenCalledWith('l1', 'restore');
+});
+it('permanent deletion warns about activities and preserves the row on failure', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson]);
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  vi.mocked(transitionLesson).mockRejectedValueOnce(new Error('No disponible'));
+  page(true);
+  await userEvent.click(await screen.findByRole('button', { name: 'Eliminar definitivamente Viajes' }));
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining('"Viajes" y todas sus actividades'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('No disponible');
+  expect(screen.getByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
+  expect(transitionLesson).toHaveBeenCalledTimes(1);
 });

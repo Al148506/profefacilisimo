@@ -51,9 +51,9 @@ function AuthPage({ registering = false }: { registering?: boolean }) {
   </section>;
 }
 
-function Dashboard() {
+function Dashboard({ trash = false }: { trash?: boolean }) {
   const { user } = useAuth();
-  return user ? <LessonsPage key={user.id} user={user} /> : null;
+  return user ? <LessonsPage key={user.id + (trash ? '-trash' : '-active')} user={user} trash={trash} /> : null;
 }
 
 export default function App() {
@@ -63,7 +63,7 @@ export default function App() {
     <main>{loading ? <p role="status">Preparando tu espacio…</p> : error ? <section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><button onClick={() => void retryInitialization()}>Reintentar</button></section> : <Routes>
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" registering />} />
-      <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Route>
+      <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/trash" element={<Dashboard trash />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Route>
       <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link to="/">Volver al inicio</Link></section>} />
     </Routes>}</main><footer>Un espacio para enseñar español, a tu manera.</footer></>;
 }

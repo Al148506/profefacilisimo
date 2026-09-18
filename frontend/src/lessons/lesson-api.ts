@@ -7,13 +7,13 @@ export type LessonListItem = {
   updatedAt: string; deletedAt: string | null;
 };
 
-export const lessonListKey = (userId: string, filters: LessonFilters) =>
-  ['lessons', userId, 'active', filters.search.trim(), filters.level] as const;
+export const lessonListKey = (userId: string, filters: LessonFilters, state: 'active' | 'trash' = 'active') =>
+  ['lessons', userId, state, state === 'trash' ? '' : filters.search.trim(), state === 'trash' ? '' : filters.level] as const;
 
-export async function listLessons(filters: LessonFilters, signal?: AbortSignal): Promise<LessonListItem[]> {
-  const query = new URLSearchParams({ state: 'active' });
-  if (filters.search.trim()) query.set('search', filters.search.trim());
-  if (filters.level) query.set('level', filters.level);
+export async function listLessons(filters: LessonFilters, signal?: AbortSignal, state: 'active' | 'trash' = 'active'): Promise<LessonListItem[]> {
+  const query = new URLSearchParams({ state });
+  if (state === 'active' && filters.search.trim()) query.set('search', filters.search.trim());
+  if (state === 'active' && filters.level) query.set('level', filters.level);
   const response = await authenticatedFetch('/api/lessons?' + query, { signal });
   if (!response.ok) {
     if (response.status === 401) throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.');
@@ -53,4 +53,14 @@ export async function saveLesson(values: import('./lesson-schema').LessonValues,
 
 export async function duplicateLesson(id: string): Promise<LessonDetails> {
   return lessonResponse(await authenticatedFetch('/api/lessons/' + encodeURIComponent(id) + '/duplicate', { method: 'POST' }));
+}
+
+export async function transitionLesson(id: string, action: 'trash' | 'restore' | 'delete'): Promise<void> {
+  const response = await authenticatedFetch('/api/lessons/' + encodeURIComponent(id) + (action === 'delete' ? '' : '/' + action),
+    { method: action === 'delete' ? 'DELETE' : 'POST' });
+  if (!response.ok) {
+    if (response.status === 409) throw new Error('El estado de la clase ha cambiado. Actualiza el listado.');
+    if (response.status === 404) throw new Error('La clase ya no está disponible. Actualiza el listado.');
+    throw new Error('No pudimos confirmar la operación. Actualiza el listado antes de volver a intentarlo.');
+  }
 }

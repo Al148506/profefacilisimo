@@ -1,3 +1,4 @@
+param([ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug')
 # Uses a disposable PostgreSQL database and a dedicated API port; never seeds the development database.
 . "$PSScriptRoot/Common.ps1"
 $settings = Read-LocalSettings
@@ -9,10 +10,10 @@ try {
     $created = $true
     $env:ConnectionStrings__Default = $settings.ConnectionString + ";Database=$database"
     $env:API_PROXY_TARGET = 'http://localhost:5081'
-    Invoke-Checked dotnet ef database update --project backend/Infrastructure --startup-project backend/Api
+    Invoke-Checked dotnet ef database update --project backend/Infrastructure --startup-project backend/Api --configuration $Configuration
     $start = @{
         FilePath = (Get-Command dotnet).Source
-        ArgumentList = @('run', '--project', 'backend/Api', '--no-build', '--no-launch-profile', '--urls', 'http://localhost:5081')
+        ArgumentList = @('run', '--project', 'backend/Api', '--no-build', '--configuration', $Configuration, '--no-launch-profile', '--urls', 'http://localhost:5081')
         WorkingDirectory = $Root
         PassThru = $true
         RedirectStandardOutput = "$Root/.tools/e2e-api.log"
