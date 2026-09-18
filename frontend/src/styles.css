@@ -31,3 +31,16 @@ button.secondary { background: transparent; color: #234e41; }
 .status { color: #286354; font-size: 13px; }
 footer { text-align: center; padding: 22px; }
 @media (max-width: 600px) { header { padding: 20px; } .header-note { display: none; } .card { padding: 26px; } }
+
+.lessons-page { width: min(100%, 960px); }
+.lesson-filters { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 28px; }
+.lesson-filters > div { flex: 1 1 180px; }
+.lesson-filters label { display: block; }
+select { font: inherit; width: 100%; border: 1px solid #c5d1c5; border-radius: 9px; padding: 12px; color: #173b37; background: white; }
+.lesson-list { list-style: none; padding: 0; display: grid; gap: 14px; }
+.lesson-list li { border: 1px solid #dfe5d8; border-radius: 12px; padding: 20px; }
+.lesson-list h2 { overflow-wrap: anywhere; margin-bottom: 12px; }
+.lesson-list p { margin-bottom: 0; }
+.level-badge { display: inline-block; background: #f1f5e6; color: #286354; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; }
+.lesson-session { border-top: 1px solid #dfe5d8; margin-top: 28px; padding-top: 14px; }
+@media (max-width: 600px) { .lesson-filters { flex-direction: column; align-items: stretch; } .lesson-filters > div { flex-basis: auto; } }

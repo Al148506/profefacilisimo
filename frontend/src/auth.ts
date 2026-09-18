@@ -78,3 +78,19 @@ export async function getCurrentUser(): Promise<User> {
   if (!response.ok) throw new Error('Tu sesión no está disponible. Vuelve a iniciar sesión.');
   return response.json();
 }
+
+/** Retries only an explicit 401 once; network errors and uncertain writes are never retried. */
+export async function authenticatedFetch(path: string, options: RequestInit = {}): Promise<Response> {
+  const request = () => {
+    const headers = new Headers(options.headers);
+    headers.set('Authorization', 'Bearer ' + (session?.accessToken ?? ''));
+    return fetch(path, { ...options, headers });
+  };
+  let response = await request();
+  if (response.status === 401 && !options.signal?.aborted && await refresh()) {
+    if (options.signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
+    response = await request();
+    if (response.status === 401) accept(null);
+  }
+  return response;
+}

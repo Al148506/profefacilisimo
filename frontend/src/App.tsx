@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Link, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
-import { getCurrentUser, initializeAuth, login, logout, register, retryInitialization, useAuth } from './auth';
+import { initializeAuth, login, register, retryInitialization, useAuth } from './auth';
+import LessonsPage from './lessons/LessonsPage';
 import { loginSchema, registerSchema, type Credentials } from './validation';
 
 function ProtectedRoute() {
@@ -51,21 +52,7 @@ function AuthPage({ registering = false }: { registering?: boolean }) {
 
 function Dashboard() {
   const { user } = useAuth();
-  const client = useQueryClient();
-  const profile = useQuery({ queryKey: ['me', user?.id], queryFn: getCurrentUser, retry: false });
-  const signOut = useMutation({ mutationFn: logout, onSuccess: () => client.clear() });
-  return <section className="card dashboard">
-    <p className="eyebrow">Fase 1 · Base</p><h1>Tu espacio está listo</h1>
-    <p>Sesión iniciada como <strong>{user?.email}</strong>.</p>
-    <div className="notice"><h2>Próximamente: tus clases</h2>
-      <p>El creador de clases llegará en la fase 2. Por ahora puedes acceder de forma segura a tu cuenta.</p>
-    </div>
-    {profile.isPending && <p role="status">Verificando tu cuenta…</p>}
-    {profile.isError && <p role="alert" className="error">{profile.error.message} <button onClick={() => void profile.refetch()}>Reintentar</button></p>}
-    {profile.isSuccess && <p className="status">Cuenta verificada con la API</p>}
-    {signOut.isError && <p role="alert" className="error">No se pudo cerrar la sesión en el servidor. Vuelve a intentarlo.</p>}
-    <button className="secondary" onClick={() => signOut.mutate()} disabled={signOut.isPending}>{signOut.isPending ? 'Cerrando…' : 'Cerrar sesión'}</button>
-  </section>;
+  return user ? <LessonsPage key={user.id} user={user} /> : null;
 }
 
 export default function App() {
