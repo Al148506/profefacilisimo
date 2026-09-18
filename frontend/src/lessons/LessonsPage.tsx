@@ -1,14 +1,23 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getCurrentUser, logout, type User } from '../auth';
-import { lessonListKey, listLessons, type LessonFilters, type LessonLevel } from './lesson-api';
+import { duplicateLesson, lessonDetailKey, lessonListKey, listLessons, type LessonFilters, type LessonLevel } from './lesson-api';
 
 export default function LessonsPage({ user }: { user: User }) {
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState<LessonLevel | ''>('');
   const [filters, setFilters] = useState<LessonFilters>({ search: '', level: '' });
   const client = useQueryClient();
+  const navigate = useNavigate();
+  const duplicate = useMutation({
+    mutationFn: duplicateLesson, retry: false,
+    onSuccess: (copy) => {
+      client.setQueryData(lessonDetailKey(user.id, copy.id), copy);
+      void client.invalidateQueries({ queryKey: ['lessons', user.id] });
+      navigate('/lessons/' + copy.id + '/edit');
+    },
+  });
   const lessons = useQuery({
     queryKey: lessonListKey(user.id, filters),
     queryFn: ({ signal }) => listLessons(filters, signal),
@@ -37,6 +46,9 @@ export default function LessonsPage({ user }: { user: User }) {
       <button type="submit">Buscar</button>
       <button className="secondary" type="button" onClick={clearFilters}>Limpiar filtros</button>
     </form>
+    {duplicate.isError && <p role="alert" className="error">{duplicate.error instanceof TypeError
+      ? 'No pudimos confirmar la copia. Actualiza el listado antes de volver a duplicar para evitar copias repetidas.'
+      : duplicate.error.message}</p>}
     <div aria-live="polite" aria-busy={lessons.isFetching}>
       {lessons.isPending && <p role="status">Cargando tus clases…</p>}
       {lessons.isError && <div role="alert" className="error">
@@ -48,7 +60,11 @@ export default function LessonsPage({ user }: { user: User }) {
         {lessons.data.length === 0
           ? <p>{filtered ? 'No hay clases que coincidan con estos filtros.' : 'Aún no tienes clases.'}</p>
           : <ul className="lesson-list">{lessons.data.map((lesson) =>
-            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p><Link to={"/lessons/" + lesson.id + "/edit"}>Editar {lesson.title}</Link></li>)}</ul>}
+            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p><Link to={"/lessons/" + lesson.id + "/edit"}>Editar {lesson.title}</Link>
+              <button className="secondary duplicate-button" type="button" disabled={duplicate.isPending}
+                aria-label={'Duplicar ' + lesson.title} onClick={() => duplicate.mutate(lesson.id)}>
+                {duplicate.isPending && duplicate.variables === lesson.id ? 'Duplicando…' : 'Duplicar'}
+              </button></li>)}</ul>}
       </>}
     </div>
     <div className="lesson-session">

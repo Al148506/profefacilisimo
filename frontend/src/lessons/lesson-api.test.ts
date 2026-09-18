@@ -34,3 +34,13 @@ it('sends only editable metadata when saving and preserves server validation mes
   await expect(saveLesson(values)).rejects.toThrow('Título inválido.');
   expect(vi.mocked(authenticatedFetch).mock.calls[1][1]?.method).toBe('POST');
 });
+
+it('duplicates with a bodyless POST and does not retry network failures', async () => {
+  const { duplicateLesson } = await import('./lesson-api');
+  vi.mocked(authenticatedFetch).mockResolvedValueOnce(new Response(JSON.stringify({ id: 'copy' })));
+  expect(await duplicateLesson('original')).toEqual({ id: 'copy' });
+  expect(authenticatedFetch).toHaveBeenCalledWith('/api/lessons/original/duplicate', { method: 'POST' });
+  vi.mocked(authenticatedFetch).mockRejectedValueOnce(new TypeError('Offline'));
+  await expect(duplicateLesson('original')).rejects.toThrow('Offline');
+  expect(authenticatedFetch).toHaveBeenCalledTimes(2);
+});

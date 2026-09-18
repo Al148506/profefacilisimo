@@ -1,20 +1,21 @@
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import LessonsPage from './LessonsPage';
-import { lessonListKey, listLessons } from './lesson-api';
+import { duplicateLesson, lessonListKey, listLessons } from './lesson-api';
 import { logout } from '../auth';
 
 vi.mock('../auth', () => ({ getCurrentUser: vi.fn().mockResolvedValue({ id: 'u1' }), logout: vi.fn() }));
-vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), listLessons: vi.fn() }));
+vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), listLessons: vi.fn(), duplicateLesson: vi.fn() }));
 const user = { id: 'u1', email: 'profe@example.com' };
 const lesson = { id: 'l1', title: 'Viajes', level: 'B1' as const, topic: 'Vacaciones', updatedAt: '2026-09-17', deletedAt: null };
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(listLessons).mockResolvedValue([]); });
+function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
 function page() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  const result = render(<QueryClientProvider client={client}><MemoryRouter><LessonsPage user={user} /></MemoryRouter></QueryClientProvider>);
+  const result = render(<QueryClientProvider client={client}><MemoryRouter><Location /><LessonsPage user={user} /></MemoryRouter></QueryClientProvider>);
   return { ...result, client };
 }
 it('shows loading followed by initial empty state', async () => {
@@ -78,4 +79,31 @@ it('clears cached data when logout succeeds', async () => {
   await screen.findByText('Aún no tienes clases.');
   await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
   await waitFor(() => expect(clear).toHaveBeenCalledOnce());
+});
+
+it('disables duplicate while pending and opens the copy only after success', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson]);
+  let resolve!: (value: Awaited<ReturnType<typeof duplicateLesson>>) => void;
+  vi.mocked(duplicateLesson).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+  const { client } = page();
+  const invalidate = vi.spyOn(client, 'invalidateQueries');
+  await userEvent.click(await screen.findByRole('button', { name: 'Duplicar Viajes' }));
+  expect(screen.getByRole('button', { name: 'Duplicar Viajes' })).toBeDisabled();
+  expect(screen.getByText('Duplicando…')).toBeInTheDocument();
+  expect(screen.getByTestId('location')).toHaveTextContent('/');
+  expect(duplicateLesson).toHaveBeenCalledTimes(1);
+  resolve({ ...lesson, id: 'copy', title: 'Viajes (copia)', objective: 'Objetivo', createdAt: '2026-09-17', estimatedDuration: null, activities: [] });
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/lessons/copy/edit'));
+  expect(invalidate).toHaveBeenCalledWith({ queryKey: ['lessons', user.id] });
+});
+it('does not retry uncertain duplication or navigate away on failure', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson]);
+  vi.mocked(duplicateLesson).mockRejectedValueOnce(new TypeError('Network error'));
+  page();
+  await userEvent.click(await screen.findByRole('button', { name: 'Duplicar Viajes' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Actualiza el listado');
+  expect(duplicateLesson).toHaveBeenCalledTimes(1);
+  expect(screen.getByTestId('location')).toHaveTextContent('/');
+  expect(screen.getByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Duplicar Viajes' })).toBeEnabled();
 });

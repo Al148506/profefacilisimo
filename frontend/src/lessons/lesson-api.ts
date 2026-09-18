@@ -50,3 +50,7 @@ export async function saveLesson(values: import('./lesson-schema').LessonValues,
     body: JSON.stringify({ title, level, topic, objective }),
   }));
 }
+
+export async function duplicateLesson(id: string): Promise<LessonDetails> {
+  return lessonResponse(await authenticatedFetch('/api/lessons/' + encodeURIComponent(id) + '/duplicate', { method: 'POST' }));
+}
