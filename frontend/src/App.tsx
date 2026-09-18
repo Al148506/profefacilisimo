@@ -1,3 +1,4 @@
+import LessonEditorPage from './lessons/LessonEditorPage';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -62,7 +63,7 @@ export default function App() {
     <main>{loading ? <p role="status">Preparando tu espacio…</p> : error ? <section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><button onClick={() => void retryInitialization()}>Reintentar</button></section> : <Routes>
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" registering />} />
-      <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /></Route>
+      <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Route>
       <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link to="/">Volver al inicio</Link></section>} />
     </Routes>}</main><footer>Un espacio para enseñar español, a tu manera.</footer></>;
 }

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getCurrentUser, logout, type User } from '../auth';
@@ -21,7 +22,7 @@ export default function LessonsPage({ user }: { user: User }) {
   }
   return <section className="card lessons-page">
     <p className="eyebrow">Tu espacio como profe</p>
-    <h1>Mis clases</h1>
+    <h1>Mis clases</h1><Link className="button" to="/lessons/new">Crear clase</Link>
     <p>Encuentra tus clases por título o nivel.</p>
     <form className="lesson-filters" onSubmit={(event) => { event.preventDefault(); setFilters({ search: search.trim(), level }); }}>
       <div><label htmlFor="lesson-search">Buscar por título</label>
@@ -47,7 +48,7 @@ export default function LessonsPage({ user }: { user: User }) {
         {lessons.data.length === 0
           ? <p>{filtered ? 'No hay clases que coincidan con estos filtros.' : 'Aún no tienes clases.'}</p>
           : <ul className="lesson-list">{lessons.data.map((lesson) =>
-            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p></li>)}</ul>}
+            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p><Link to={"/lessons/" + lesson.id + "/edit"}>Editar {lesson.title}</Link></li>)}</ul>}
       </>}
     </div>
     <div className="lesson-session">

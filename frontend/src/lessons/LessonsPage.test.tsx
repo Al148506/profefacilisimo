@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -13,7 +14,7 @@ const lesson = { id: 'l1', title: 'Viajes', level: 'B1' as const, topic: 'Vacaci
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(listLessons).mockResolvedValue([]); });
 function page() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  const result = render(<QueryClientProvider client={client}><LessonsPage user={user} /></QueryClientProvider>);
+  const result = render(<QueryClientProvider client={client}><MemoryRouter><LessonsPage user={user} /></MemoryRouter></QueryClientProvider>);
   return { ...result, client };
 }
 it('shows loading followed by initial empty state', async () => {

@@ -44,3 +44,9 @@ select { font: inherit; width: 100%; border: 1px solid #c5d1c5; border-radius: 9
 .level-badge { display: inline-block; background: #f1f5e6; color: #286354; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; }
 .lesson-session { border-top: 1px solid #dfe5d8; margin-top: 28px; padding-top: 14px; }
 @media (max-width: 600px) { .lesson-filters { flex-direction: column; align-items: stretch; } .lesson-filters > div { flex-basis: auto; } }
+
+.lesson-editor { width: min(100%, 650px); }
+.lesson-editor fieldset { display: flex; flex-direction: column; border: 0; padding: 0; margin: 0; min-width: 0; }
+textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid #c5d1c5; border-radius: 9px; padding: 12px; color: #173b37; background: white; }
+.editor-back { margin-top: 18px; }
+.lesson-list a { display: inline-block; margin-top: 12px; overflow-wrap: anywhere; }
