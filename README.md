@@ -668,3 +668,6 @@ dependerá de la validación de la anterior.
 
 Consulta [la guía de implementación y pruebas](docs/phase-1.md) para arrancar la aplicación y revisar las decisiones técnicas.
 
+
+## Gestión de clases — SPEC 01
+Consulta [la guía de gestión de clases](docs/class-management.md) para crear, editar, duplicar, restaurar y eliminar clases, conocer los límites del MVP y ejecutar sus pruebas.

@@ -33,3 +33,23 @@ describe('session transport', () => {
   });
 });
 
+
+it('authenticated transport attaches Bearer and retries only one explicit 401', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch')
+    .mockResolvedValueOnce(new Response(JSON.stringify(mockSession)))
+    .mockResolvedValueOnce(new Response('', { status: 401 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ ...mockSession, accessToken: 'renewed' })))
+    .mockResolvedValueOnce(new Response('', { status: 401 }));
+  const auth = await import('./auth');
+  await auth.login('profe@example.com', 'Password12345');
+  expect((await auth.authenticatedFetch('/api/lessons')).status).toBe(401);
+  expect(fetchMock).toHaveBeenCalledTimes(4);
+  const headers = fetchMock.mock.calls[3][1]?.headers as Headers;
+  expect(headers.get('Authorization')).toBe('Bearer renewed');
+});
+it('authenticated transport does not retry uncertain network failures', async () => {
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Offline'));
+  const auth = await import('./auth');
+  await expect(auth.authenticatedFetch('/api/lessons', { method: 'POST' })).rejects.toThrow('Offline');
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+});

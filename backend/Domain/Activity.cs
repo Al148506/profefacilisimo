@@ -62,6 +62,19 @@ public sealed class Activity
     public int Order { get; private set; }
     public int? EstimatedDuration { get; private set; }
 
+    // Copy the stored JSON verbatim; do not reinterpret or normalize legacy content.
+    internal Activity CopyTo(Guid lessonId) => new()
+    {
+        Id = Guid.NewGuid(),
+        LessonId = lessonId,
+        Type = Type,
+        Title = Title,
+        Instructions = Instructions,
+        Content = Content,
+        Order = Order,
+        EstimatedDuration = EstimatedDuration
+    };
+
     public ActivityContent ReadContent() => Type switch
     {
         ActivityType.Speaking => JsonSerializer.Deserialize<SpeakingContent>(Content, ContentJson.Options)!,
