@@ -48,14 +48,50 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
   tiene `AutoCreateBranch: true`.
 - Las specs aprobadas se implementan con el skill `spec-impl`, en rama `spec-NN-slug`.
 
-## SPEC 02 (editor de actividades MVP) — en curso
+## SPEC 02 (editor de actividades MVP) — cerrada y validada
 
-Estado detallado y punto de reanudación: `.workbuddy-ai/memory/2026-09-23.md` (última sección).
-Resumen: rama `spec-02-editor-de-actividades-mvp`, modo `step`, etapas **1–4 de 10 hechas**
-(dominio, migración y lectura). Siguiente: **etapa 5**, escritura POST/PUT con el conjunto completo
-(¡ojo al gotcha de EF de arriba!). Baseline: `Domain.Tests` 55/55 ✓, `Integration.Tests` 80/80 ✓,
-frontend 40/40 ✓.
+Las **diez etapas** están implementadas y la validación final de los 30 criterios de aceptación
+(§11 de la spec) se completó: dominio, migración, lectura, escritura conjunta (backend), el editor
+completo (frontend), la documentación y el E2E permanente.
+
+Baseline verificado el 2026-09-23: `dotnet build Profefacilisimo.slnx --no-restore` 0 errores /
+0 advertencias, `Domain.Tests` 55/55 ✓, `Integration.Tests` 101/101 ✓, frontend 57/57 ✓,
+`tsc -b` y `eslint .` limpios, **E2E 4/4 ✓** (`lesson-builder`, `lessons` ×2, `session`).
+
+**`playwright test` SÍ funciona en este entorno** (ver la receta al final); el problema del sandbox
+es solo la limpieza masiva de `frontend/test-results` en el mismo turno, y Playwright lo vacía solo
+cuando la ejecución termina bien.
 
 **Aislamiento de los tests de integración**: `IClassFixture` crea una base `pf_test_*` por **clase**
 de test, no por test. Dos tests que insertan filas en la misma clase se contaminan entre sí
 (rompen los `CountAsync`); ponlos en clases distintas.
+
+## Verificar una funcionalidad del frontend en un navegador real
+
+Receta que funciona en este entorno (usada para el E2E del editor de actividades):
+
+```bash
+# 1. Base desechable + migraciones (dotnet ef EXIGE Jwt__SigningKey, no solo la cadena de conexión)
+docker compose exec -T postgres sh -c 'createdb -U "$POSTGRES_USER" pf_e2e'
+ConnectionStrings__Default='Host=localhost;Port=5432;Database="pf_e2e";Username="profefacilisimo";Password="..."' \
+Jwt__SigningKey='<SigningKey de .tools/local-settings.json>' ASPNETCORE_ENVIRONMENT=Development \
+  ~/.dotnet/tools/dotnet-ef database update --project backend/Infrastructure --startup-project backend/Api --no-build
+
+# 2. API dedicada en el puerto que usa el proxy de Vite por defecto (5080)
+dotnet run --project backend/Api --no-build --no-launch-profile --urls http://localhost:5080   # en background
+
+# 3. Runner de Playwright (arranca Vite él mismo vía webServer de playwright.config.ts)
+cd frontend && npx playwright test --reporter=list
+```
+
+- Al terminar: parar la API y `dropdb --if-exists --force -U "$POSTGRES_USER" pf_e2e`.
+- Con Playwright, `getByLabel('Pregunta 1')` también casa con el `aria-label` «Quitar pregunta 1»:
+  usar `{ exact: true }`.
+- **Cuidado con `getByText` cuando el total coincide con una duración de actividad**: en strict mode
+  casa dos nodos. Anclar al nodo correcto (`getByText('Duración total:')` o `.activity-duration`).
+- Si la ejecución falla, deja muchos artefactos en `frontend/test-results/`: bórralos en un turno
+  aparte o con `rm -rf` (el sandbox bloquea borrados masivos >50 ficheros en el mismo turno).
+- Los specs E2E escriben capturas en `.tools/` (ignorado por git): es la convención del repo.
+- **`tsconfig.json` del frontend solo incluye `src`**: `e2e/` queda fuera de `tsc -b`.
+- **El entorno crea commits automáticamente.** Durante una sesión aparecieron commits que el agente
+  no hizo; no asumir que el árbol limpio significa que no se ha commiteado nada.
