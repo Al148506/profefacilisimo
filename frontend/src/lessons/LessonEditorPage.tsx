@@ -7,8 +7,8 @@ import { useAuth } from '../auth';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
 import {
-  ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, activityIssueIndex, createDraft, draftFingerprint, draftFromSaved,
-  lessonDraftSchema, lessonSchema, toActivityInput,
+  ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, activityDraftSchema, activityIssueIndex, createDraft, draftFingerprint,
+  draftFromSaved, lessonDraftSchema, lessonSchema, toActivityInput,
   type ActivityDraft, type ActivityType, type LessonValues,
 } from './lesson-schema';
 import { LessonSaveError, getLesson, lessonDetailKey, saveLesson, type LessonDetails, type SaveLessonValues } from './lesson-api';
@@ -45,6 +45,21 @@ function serverErrors(fields: Record<string, string[]>, activities: readonly Act
     target[match![2] ?? 'activity'] ??= messages[0] ?? 'El servidor rechazó esta actividad.';
   }
   return byKey;
+}
+
+/**
+ * Re-validates one activity as it is edited, so a message never outlives the mistake it reports.
+ * Only activities that already carry errors are re-checked: an activity the teacher has not tried to
+ * save yet is never marked for fields still left to fill in.
+ */
+function revalidate(errors: DraftErrors, activity: ActivityDraft): DraftErrors {
+  if (!errors[activity.key]) return errors;
+  const parsed = activityDraftSchema.safeParse(activity);
+  const fields = parsed.success ? {} : (issueErrors(parsed.error.issues, [activity])[activity.key] ?? {});
+  if (Object.keys(fields).length > 0) return { ...errors, [activity.key]: fields };
+  const remaining = { ...errors };
+  delete remaining[activity.key];
+  return remaining;
 }
 
 function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetails }) {
@@ -116,6 +131,7 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
   }
   function updateActivity(next: ActivityDraft) {
     setActivities(activities.map((activity) => (activity.key === next.key ? next : activity)));
+    setErrors((current) => revalidate(current, next));
   }
   function removeActivity(key: string) {
     const index = activities.findIndex((activity) => activity.key === key);

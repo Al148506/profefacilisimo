@@ -207,6 +207,17 @@ it('blocks the whole save when one activity is invalid and marks it even if it i
   expect(failed).toHaveAttribute('aria-pressed', 'false');
   expect(failed).toHaveAccessibleDescription('Indica la duración en minutos.');
   expect(screen.getByText('Duración total:')).toHaveTextContent('Duración incompleta');
+  // Correcting a field clears its message: no error outlives the mistake it reports.
+  await userEvent.type(screen.getByLabelText('Duración (minutos)'), '5');
+  expect(screen.getByRole('button', { name: /^Conversación/ })).not.toHaveAccessibleDescription('Indica la duración en minutos.');
+  expect(screen.getByRole('button', { name: /^Escritura/ })).toHaveAccessibleDescription('Indica la duración en minutos.');
+  await userEvent.click(screen.getByRole('button', { name: /^Escritura/ }));
+  await userEvent.type(screen.getByLabelText('Duración (minutos)'), '10');
+  expect(screen.getByText('Duración total:')).toHaveTextContent('15 min');
+  expect(screen.queryByText('Indica la duración en minutos.')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(saveLesson).mock.calls[0][0].activities.map((activity) => activity.estimatedDuration)).toEqual([5, 10]);
 });
 
 it('keeps the activity draft and marks the activity the server rejected', async () => {
