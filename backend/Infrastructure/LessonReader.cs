@@ -30,7 +30,7 @@ public sealed class LessonReader(AppDbContext db) : ILessonReader
             query = query.OrderByDescending(x => x.UpdatedAt).ThenBy(x => x.Id);
         }
         return await query.Select(x => new LessonListItemDto(x.Id, x.Title, x.Level.ToString(),
-            x.Topic, x.UpdatedAt, x.DeletedAt)).ToListAsync(cancellationToken);
+            x.Topic, x.EstimatedDuration, x.UpdatedAt, x.DeletedAt)).ToListAsync(cancellationToken);
     }
 
     public async Task<LessonDetailsDto?> GetOwnedDetailsAsync(Guid lessonId, Guid userId, CancellationToken cancellationToken)

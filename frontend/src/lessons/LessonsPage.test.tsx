@@ -10,7 +10,7 @@ import { logout } from '../auth';
 vi.mock('../auth', () => ({ getCurrentUser: vi.fn().mockResolvedValue({ id: 'u1' }), logout: vi.fn() }));
 vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), listLessons: vi.fn(), duplicateLesson: vi.fn(), transitionLesson: vi.fn() }));
 const user = { id: 'u1', email: 'profe@example.com' };
-const lesson = { id: 'l1', title: 'Viajes', level: 'B1' as const, topic: 'Vacaciones', updatedAt: '2026-09-17', deletedAt: null };
+const lesson = { id: 'l1', title: 'Viajes', level: 'B1' as const, topic: 'Vacaciones', estimatedDuration: 60, updatedAt: '2026-09-17', deletedAt: null };
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(listLessons).mockResolvedValue([]); });
 function Location() { return <output data-testid="location">{useLocation().pathname}</output>; }
 function page(trash = false) {
@@ -32,6 +32,25 @@ it('shows title, level and topic in server order', async () => {
   expect(await screen.findByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
   expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('ViajesB1Vacaciones');
   expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('Segunda');
+});
+it('shows the calculated total, 0 for an empty lesson, and the incomplete label', async () => {
+  vi.mocked(listLessons).mockResolvedValue([
+    { ...lesson, id: 'l1', title: 'Completa', estimatedDuration: 30 },
+    { ...lesson, id: 'l2', title: 'Incompleta', estimatedDuration: null },
+    { ...lesson, id: 'l3', title: 'Vacía', estimatedDuration: 0 },
+  ]);
+  page();
+  expect(await screen.findByRole('heading', { name: 'Completa' })).toBeInTheDocument();
+  expect(screen.getByText('30 min')).toBeInTheDocument();
+  expect(screen.getByText('Duración incompleta')).toBeInTheDocument();
+  expect(screen.getByText('0 min')).toBeInTheDocument();
+});
+it('leaves the trash list unchanged, without durations', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson]);
+  page(true);
+  expect(await screen.findByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
+  expect(screen.queryByText('60 min')).not.toBeInTheDocument();
+  expect(screen.queryByText('Duración incompleta')).not.toBeInTheDocument();
 });
 it('combines trimmed local filters and clears them without changing the URL', async () => {
   page();
