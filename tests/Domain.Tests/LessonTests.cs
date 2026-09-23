@@ -4,7 +4,10 @@ namespace Profefacilisimo.Tests;
 
 public class LessonTests
 {
-    private static Lesson Create() => new(Guid.NewGuid(), "Viajes", LessonLevel.B1, "Vacaciones", "Hablar del pasado", 60);
+    private static Lesson Create() => new(Guid.NewGuid(), "Viajes", LessonLevel.B1, "Vacaciones", "Hablar del pasado");
+
+    private static ActivityDraft Draft(string title, int minutes, ActivityContent content, Guid? id = null) =>
+        new(id, title, "Instrucciones", content, minutes);
 
     [Fact]
     public void EmptyDraftIsAllowed() => Assert.Empty(Create().Activities);
@@ -15,10 +18,8 @@ public class LessonTests
     [Fact]
     public void UnsupportedLevelIsRejected() => Assert.Throws<ArgumentException>(() => new Lesson(Guid.NewGuid(), "A", (LessonLevel)99, "B", "C"));
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-5)]
-    public void NonPositiveDurationIsRejected(int duration) => Assert.Throws<ArgumentOutOfRangeException>(() => new Lesson(Guid.NewGuid(), "A", LessonLevel.A2, "B", "C", duration));
+    [Fact]
+    public void NewLessonStartsWithZeroTotalInsteadOfNull() => Assert.Equal(0, Create().EstimatedDuration);
 
     [Theory]
     [InlineData("")]
@@ -110,7 +111,7 @@ public class LessonTests
         Assert.Equal(200, lesson.Title.Length);
         Assert.Equal(200, lesson.Topic.Length);
         Assert.Equal(2000, lesson.Objective.Length);
-        Assert.Null(lesson.EstimatedDuration);
+        Assert.Equal(0, lesson.EstimatedDuration);
         Assert.Null(lesson.DeletedAt);
         Assert.Equal(TimeSpan.Zero, lesson.CreatedAt.Offset);
     }
@@ -147,22 +148,22 @@ public class LessonTests
         Assert.NotNull(lesson.Duplicate());
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData(60)]
-    public void DuplicatePreservesAllActivityDataWithIndependentIdentities(int? duration)
+    [Fact]
+    public void DuplicatePreservesAllActivityDataWithIndependentIdentities()
     {
-        var lesson = new Lesson(Guid.NewGuid(), "Viajes", LessonLevel.B1, "Tema", "Objetivo", duration);
+        var lesson = new Lesson(Guid.NewGuid(), "Viajes", LessonLevel.B1, "Tema", "Objetivo");
         ActivityContent[] contents = [new SpeakingContent(["Pregunta"]), new ReadingContent("Texto", ["Pregunta"]),
             new WritingContent("Consigna"), new VocabularyGrammarContent("Explicación", ["Ejercicio"])];
         for (var i = 0; i < contents.Length; i++)
             lesson.AddActivity($"Actividad {i}", "Instrucciones", contents[i], i % 2 == 0 ? null : 5);
+        // Two activities still lack a duration, so the source total is "incomplete".
+        Assert.Null(lesson.EstimatedDuration);
         var originalUpdatedAt = lesson.UpdatedAt;
         var start = DateTimeOffset.UtcNow;
         var copy = lesson.Duplicate();
         Assert.NotEqual(lesson.Id, copy.Id);
         Assert.Equal("Viajes (copia)", copy.Title);
-        Assert.Equal((lesson.UserId, lesson.Level, lesson.Topic, lesson.Objective, duration),
+        Assert.Equal((lesson.UserId, lesson.Level, lesson.Topic, lesson.Objective, lesson.EstimatedDuration),
             (copy.UserId, copy.Level, copy.Topic, copy.Objective, copy.EstimatedDuration));
         Assert.Null(copy.DeletedAt);
         Assert.InRange(copy.CreatedAt, start, DateTimeOffset.UtcNow);
@@ -198,6 +199,189 @@ public class LessonTests
         var copy = lesson.Duplicate();
         Assert.Equal(new string('a', Math.Min(length, 192)) + " (copia)", copy.Title);
         Assert.Empty(copy.Activities);
-        Assert.Null(copy.EstimatedDuration);
+        Assert.Equal(0, copy.EstimatedDuration);
+    }
+
+    [Fact]
+    public void TotalIsTheSumOfActivityDurations()
+    {
+        var lesson = Create();
+        var first = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var second = lesson.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]), 15);
+        var third = lesson.AddActivity("C", "Instrucciones", new ReadingContent("Texto", ["Pregunta"]), 5);
+        Assert.Equal(30, lesson.EstimatedDuration);
+
+        // Dropping the 10-minute activity leaves 20.
+        lesson.ApplyActivities([
+            Draft("B", 15, new SpeakingContent(["Pregunta"]), second.Id),
+            Draft("C", 5, new ReadingContent("Texto", ["Pregunta"]), third.Id)]);
+
+        Assert.Equal(20, lesson.EstimatedDuration);
+        Assert.DoesNotContain(first.Id, lesson.Activities.Select(x => x.Id));
+    }
+
+    [Fact]
+    public void TotalIsNullWhileAnyActivityLacksADuration()
+    {
+        var lesson = Create();
+        var complete = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var legacy = lesson.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]));
+        Assert.Null(lesson.EstimatedDuration);
+
+        // Completing the missing duration turns the incomplete total into a real sum.
+        lesson.ApplyActivities([
+            Draft("A", 10, new WritingContent("Consigna"), complete.Id),
+            Draft("B", 15, new SpeakingContent(["Pregunta"]), legacy.Id)]);
+
+        Assert.Equal(25, lesson.EstimatedDuration);
+    }
+
+    [Fact]
+    public void EmptyActivitySetLeavesZeroTotal()
+    {
+        var lesson = Create();
+        lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+
+        lesson.ApplyActivities([]);
+
+        Assert.Empty(lesson.Activities);
+        Assert.Equal(0, lesson.EstimatedDuration);
+    }
+
+    [Fact]
+    public void TotalDoesNotDependOnOrder()
+    {
+        var lesson = Create();
+        var first = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var second = lesson.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]), 15);
+        var third = lesson.AddActivity("C", "Instrucciones", new ReadingContent("Texto", ["Pregunta"]), 5);
+
+        lesson.ApplyActivities([
+            Draft("C", 5, new ReadingContent("Texto", ["Pregunta"]), third.Id),
+            Draft("B", 15, new SpeakingContent(["Pregunta"]), second.Id),
+            Draft("A", 10, new WritingContent("Consigna"), first.Id)]);
+
+        Assert.Equal(30, lesson.EstimatedDuration);
+        Assert.Equal([third.Id, second.Id, first.Id], lesson.Activities.Select(x => x.Id));
+    }
+
+    [Fact]
+    public void ApplyingASetAssignsConsecutiveOrderFromZeroAndKeepsIdentities()
+    {
+        var lesson = Create();
+        var first = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var second = lesson.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]), 15);
+
+        lesson.ApplyActivities([
+            Draft("B", 15, new SpeakingContent(["Pregunta"]), second.Id),
+            Draft("Nueva", 5, new ReadingContent("Texto", ["Pregunta"])),
+            Draft("A", 10, new WritingContent("Consigna"), first.Id)]);
+
+        var applied = lesson.Activities.ToArray();
+        Assert.Equal([0, 1, 2], applied.Select(x => x.Order));
+        // Persisted activities keep their instance and their Id; the new one gets its own identity.
+        Assert.Same(second, applied[0]);
+        Assert.Same(first, applied[2]);
+        Assert.Equal(second.Id, applied[0].Id);
+        Assert.Equal(first.Id, applied[2].Id);
+        Assert.NotEqual(Guid.Empty, applied[1].Id);
+        Assert.Equal(lesson.Id, applied[1].LessonId);
+        Assert.Equal("Nueva", applied[1].Title);
+        Assert.Equal(5, applied[1].EstimatedDuration);
+        Assert.Equal(30, lesson.EstimatedDuration);
+    }
+
+    [Fact]
+    public void ApplyingASetRewritesEditableDataWithoutTouchingMetadata()
+    {
+        var lesson = Create();
+        var activity = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var metadata = (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.CreatedAt);
+        var start = DateTimeOffset.UtcNow;
+
+        // Title and instructions are trimmed; the type-specific content keeps its phase-1 format.
+        lesson.ApplyActivities([Draft(" Cambiada ", 45, new WritingContent("Nueva consigna"), activity.Id)]);
+
+        Assert.Same(activity, Assert.Single(lesson.Activities));
+        Assert.Equal("Cambiada", activity.Title);
+        Assert.Equal("Instrucciones", activity.Instructions);
+        Assert.Equal(45, activity.EstimatedDuration);
+        Assert.Equal("Nueva consigna", Assert.IsType<WritingContent>(activity.ReadContent()).Prompt);
+        Assert.Equal(metadata, (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.CreatedAt));
+        Assert.InRange(lesson.UpdatedAt, start, DateTimeOffset.UtcNow);
+    }
+
+    [Fact]
+    public void UnknownOrForeignActivityIdRejectsTheWholeSetWithoutPartialUpdate()
+    {
+        var lesson = Create();
+        var activity = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var before = (lesson.EstimatedDuration, lesson.Activities.Count, activity.Title, activity.EstimatedDuration, lesson.UpdatedAt);
+
+        Assert.Throws<ArgumentException>(() => lesson.ApplyActivities([
+            Draft("Cambiada", 99, new WritingContent("Consigna"), activity.Id),
+            Draft("Ajena", 5, new WritingContent("Consigna"), Guid.NewGuid())]));
+
+        Assert.Equal(before, (lesson.EstimatedDuration, lesson.Activities.Count, activity.Title, activity.EstimatedDuration, lesson.UpdatedAt));
+        Assert.Equal("A", activity.Title);
+        Assert.Equal(10, activity.EstimatedDuration);
+    }
+
+    [Fact]
+    public void RepeatedActivityIdRejectsTheWholeSetWithoutPartialUpdate()
+    {
+        var lesson = Create();
+        var activity = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var before = (lesson.EstimatedDuration, activity.Title, activity.EstimatedDuration, lesson.UpdatedAt);
+
+        Assert.Throws<ArgumentException>(() => lesson.ApplyActivities([
+            Draft("Primera", 20, new WritingContent("Consigna"), activity.Id),
+            Draft("Segunda", 30, new WritingContent("Consigna"), activity.Id)]));
+
+        Assert.Equal(before, (lesson.EstimatedDuration, activity.Title, activity.EstimatedDuration, lesson.UpdatedAt));
+    }
+
+    [Fact]
+    public void OneInvalidActivityRejectsTheWholeSetWithoutPartialUpdate()
+    {
+        var lesson = Create();
+        var activity = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        var before = (lesson.EstimatedDuration, activity.Title, activity.EstimatedDuration);
+
+        Assert.Throws<ArgumentException>(() => lesson.ApplyActivities([
+            Draft("Cambiada", 99, new WritingContent("Consigna"), activity.Id),
+            Draft("Inválida", 5, new SpeakingContent([]))]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => lesson.ApplyActivities([Draft("Sin duración", 0, new WritingContent("Consigna"))]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => lesson.ApplyActivities([Draft("Negativa", -5, new WritingContent("Consigna"))]));
+
+        Assert.Equal(before, (lesson.EstimatedDuration, activity.Title, activity.EstimatedDuration));
+        Assert.Single(lesson.Activities);
+    }
+
+    [Fact]
+    public void TotalRejectsOverflowInsteadOfTruncating()
+    {
+        var lesson = Create();
+        var activity = lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), int.MaxValue);
+
+        Assert.Throws<OverflowException>(() => lesson.ApplyActivities([
+            Draft("A", int.MaxValue, new WritingContent("Consigna"), activity.Id),
+            Draft("B", 1, new WritingContent("Consigna"))]));
+
+        Assert.Equal(int.MaxValue, lesson.EstimatedDuration);
+        Assert.Single(lesson.Activities);
+    }
+
+    [Fact]
+    public void DuplicateRecalculatesTheTotalFromTheCopiedActivities()
+    {
+        var lesson = Create();
+        lesson.AddActivity("A", "Instrucciones", new WritingContent("Consigna"), 10);
+        lesson.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]), 15);
+
+        var copy = lesson.Duplicate();
+
+        Assert.Equal(25, copy.EstimatedDuration);
+        Assert.Equal(lesson.EstimatedDuration, copy.EstimatedDuration);
     }
 }

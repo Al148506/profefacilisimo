@@ -16,6 +16,13 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
 - **El tool de PowerShell no devuelve stdout** en este entorno. Para capturar salida, redirigir a
   fichero y leerlo con la herramienta de lectura.
 - `cmd.exe` está bloqueado desde bash por política de seguridad.
+- **Los tests de integración SÍ se pueden ejecutar**: PostgreSQL está disponible en `localhost:5432`.
+  La cadena de conexión y la clave JWT están en `.tools/local-settings.json` (no versionado).
+  ```bash
+  TEST_DATABASE_CONNECTION='<ConnectionString>' \
+    dotnet test tests/Integration.Tests/Integration.Tests.csproj --no-restore
+  ```
+  El fixture crea bases `pf_test_*` aisladas por clase de test.
 - **Bloqueo de ficheros**: si hay una instancia de la API en ejecución o Visual Studio abierto, la
   compilación de `backend/Api` falla con `MSB3021/MSB3027` al copiar `Domain.dll`,
   `Application.dll` e `Infrastructure.dll` a `backend/Api/bin`. Son fallos de copia, no de
@@ -36,3 +43,11 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
 - Las specs viven en `specs/` con estado en la cabecera (`**Estado:**`). `specs/.spec-config.yml`
   tiene `AutoCreateBranch: true`.
 - Las specs aprobadas se implementan con el skill `spec-impl`, en rama `spec-NN-slug`.
+
+## SPEC 02 (editor de actividades MVP) — en curso
+
+Estado detallado y punto de reanudación: `.workbuddy-ai/memory/2026-09-23.md` (última sección).
+Resumen: rama `spec-02-editor-de-actividades-mvp`, modo `step`, etapas **1 y 2 de 10 hechas**
+(dominio). Siguiente: **etapa 3**, la migración `AddCalculatedLessonDuration`. Baseline:
+`Domain.Tests` 55/55 verde; `Integration.Tests` 42/78 — los 36 fallos son solo
+`CK_Lesson_Duration` rechazando el total `0`, y la etapa 3 los resuelve.

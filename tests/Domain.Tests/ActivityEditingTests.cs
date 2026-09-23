@@ -5,7 +5,7 @@ namespace Profefacilisimo.Tests;
 
 public class ActivityEditingTests
 {
-    private static Lesson Create() => new(Guid.NewGuid(), "Viajes", LessonLevel.B1, "Vacaciones", "Hablar del pasado", 60);
+    private static Lesson Create() => new(Guid.NewGuid(), "Viajes", LessonLevel.B1, "Vacaciones", "Hablar del pasado");
 
     private static Activity Speaking(Lesson lesson) =>
         lesson.AddActivity("Conversación", "Responde en voz alta", new SpeakingContent(["¿Adónde viajaste?"]), 10);
@@ -75,13 +75,14 @@ public class ActivityEditingTests
         var edited = Speaking(lesson);
         var sibling = lesson.AddActivity("Escribe", "Redacta", new WritingContent("Describe tu viaje."), 5);
         var siblingBefore = Snapshot(sibling);
-        var lessonBefore = (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.EstimatedDuration, lesson.UpdatedAt);
+        // The lesson total is owned by the lesson and refreshed when it applies a set, so editing
+        // one activity directly must not touch the lesson metadata.
+        var lessonBefore = (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.UpdatedAt);
 
         edited.Update("Otro título", "Otras instrucciones", new WritingContent("Otra consigna."), 45);
 
         Assert.Equal(siblingBefore, Snapshot(sibling));
-        Assert.Equal(lessonBefore,
-            (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.EstimatedDuration, lesson.UpdatedAt));
+        Assert.Equal(lessonBefore, (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.UpdatedAt));
         Assert.Equal(2, lesson.Activities.Count);
     }
 

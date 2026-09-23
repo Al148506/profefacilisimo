@@ -234,7 +234,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.NotEqual(payload.id, detail.Id);
         Assert.Equal(("Nueva", level, "Tema", "Objetivo"), (detail.Title, detail.Level, detail.Topic, detail.Objective));
         Assert.Empty(detail.Activities);
-        Assert.Null(detail.EstimatedDuration);
+        Assert.Equal(0, detail.EstimatedDuration);
         Assert.Null(detail.DeletedAt);
         Assert.InRange(detail.CreatedAt, start, DateTimeOffset.UtcNow);
         Assert.Equal(detail.CreatedAt, detail.UpdatedAt);
@@ -300,8 +300,8 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         var (owner, _) = await Seed();
         using var scope = fixture.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var lesson = new Lesson(owner, "Anterior", LessonLevel.B1, "Tema", "Objetivo", 60);
-        lesson.AddActivity("Una", "Instrucciones", new WritingContent("Texto"));
+        var lesson = new Lesson(owner, "Anterior", LessonLevel.B1, "Tema", "Objetivo");
+        lesson.AddActivity("Una", "Instrucciones", new WritingContent("Texto"), 5);
         lesson.AddActivity("Dos", "Instrucciones", new ReadingContent("Lectura", ["Pregunta"]), 15);
         db.Lessons.Add(lesson);
         await db.SaveChangesAsync();
@@ -324,7 +324,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.Equal(lesson.Id, detail.Id);
         Assert.Equal(createdAt, detail.CreatedAt);
         Assert.InRange(detail.UpdatedAt, start, DateTimeOffset.UtcNow);
-        Assert.Equal(60, detail.EstimatedDuration);
+        Assert.Equal(20, detail.EstimatedDuration);
         Assert.Null(detail.DeletedAt);
         Assert.Equal(2, detail.Activities.Count);
         db.ChangeTracker.Clear();
@@ -399,7 +399,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         var (owner, _) = await Seed();
         using var scope = fixture.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var source = new Lesson(owner, new string('x', 200), LessonLevel.B2, "Tema", "Objetivo", withActivities ? 60 : null);
+        var source = new Lesson(owner, new string('x', 200), LessonLevel.B2, "Tema", "Objetivo");
         if (withActivities)
         {
             source.AddActivity("Hablar", "Instrucciones", new SpeakingContent(["Pregunta"]));
@@ -589,7 +589,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         var (other, _) = await Seed();
         using var scope = fixture.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var target = new Lesson(owner, "Clase", LessonLevel.B1, "Tema", "Objetivo", 60);
+        var target = new Lesson(owner, "Clase", LessonLevel.B1, "Tema", "Objetivo");
         if (withActivities)
         {
             target.AddActivity("Una", "Instrucciones", new WritingContent("Texto"));

@@ -68,16 +68,31 @@ public sealed class Activity
     // type, so an incompatible type/content pair cannot be stored.
     public void Update(string title, string instructions, ActivityContent content, int estimatedDuration)
     {
-        ArgumentNullException.ThrowIfNull(content);
-        content.Validate();
-        var validTitle = Rules.Text(title, 200, nameof(title));
-        var validInstructions = Rules.Text(instructions, 2000, nameof(instructions));
-        var validDuration = Rules.RequiredDuration(estimatedDuration);
+        var (validTitle, validInstructions, validDuration) =
+            ValidateEditableData(title, instructions, content, estimatedDuration);
         Type = content.Type;
         Content = JsonSerializer.Serialize(content, content.GetType(), ContentJson.Options);
         Title = validTitle;
         Instructions = validInstructions;
         EstimatedDuration = validDuration;
+    }
+
+    // Validation without mutation, so a caller applying a whole set can reject the request before
+    // changing any activity.
+    internal static (string Title, string Instructions, int Duration) ValidateEditableData(
+        string title, string instructions, ActivityContent content, int estimatedDuration)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        content.Validate();
+        return (Rules.Text(title, 200, nameof(title)),
+            Rules.Text(instructions, 2000, nameof(instructions)),
+            Rules.RequiredDuration(estimatedDuration));
+    }
+
+    internal void SetOrder(int order)
+    {
+        if (order < 0) throw new ArgumentOutOfRangeException(nameof(order), "Order cannot be negative.");
+        Order = order;
     }
 
     // Copy the stored JSON verbatim; do not reinterpret or normalize legacy content.
