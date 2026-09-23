@@ -41,7 +41,13 @@ public class LessonMigrationTests(ApiFixture fixture) : IClassFixture<ApiFixture
 
         await migrator.MigrateAsync();
 
-        Assert.Equal(lessonsBefore, await LessonRows(db));
+        // AddCalculatedLessonDuration is the only migration that rewrites rows: the phase-1 manual
+        // totals become calculated ones. The lesson holding a duration-less activity is incomplete
+        // (null) and the lesson without activities totals 0.
+        db.ChangeTracker.Clear();
+        Assert.NotEqual(lessonsBefore, await LessonRows(db));
+        Assert.Null((await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == lesson)).EstimatedDuration);
+        Assert.Equal(0, (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == emptyLesson)).EstimatedDuration);
         Assert.Equal(activitiesBefore, await ActivityRows(db));
         Assert.Equal(indexesBefore, await Indexes(db));
         Assert.Empty(await db.Database.GetPendingMigrationsAsync());
@@ -97,4 +103,66 @@ public class LessonMigrationTests(ApiFixture fixture) : IClassFixture<ApiFixture
         SELECT indexdef AS "Value" FROM pg_indexes
         WHERE schemaname = 'public' AND tablename IN ('Lessons', 'Activities') ORDER BY indexname
         """).ToArrayAsync();
+}
+
+// Its own class on purpose: IClassFixture gives every test class an isolated pf_test_* database,
+// so this fixture's rows cannot leak into the soft-delete migration test above.
+public class LessonDurationMigrationTests(ApiFixture fixture) : IClassFixture<ApiFixture>
+{
+    [Fact]
+    public async Task CalculatedDurationMigrationFillsEmptyCompleteAndIncompleteLessons()
+    {
+        // This fixture owns a fresh pf_test_* database; never downgrade the development database.
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(fixture.ConnectionString).Options);
+        var migrator = db.GetService<IMigrator>();
+        await migrator.MigrateAsync("20260917232218_AddLessonSoftDelete");
+
+        var owner = Guid.NewGuid();
+        var empty = Guid.NewGuid();
+        var complete = Guid.NewGuid();
+        var incomplete = Guid.NewGuid();
+        var trashed = Guid.NewGuid();
+        var timestamp = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
+        var json = """{"prompt":"Texto"}""";
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "AspNetUsers" ("Id", "UserName", "EmailConfirmed", "PhoneNumberConfirmed",
+                "TwoFactorEnabled", "LockoutEnabled", "AccessFailedCount")
+            VALUES ({owner}, 'duration-owner', false, false, false, false, 0);
+            INSERT INTO "Lessons" ("Id", "UserId", "Title", "Level", "Topic", "Objective",
+                "EstimatedDuration", "CreatedAt", "UpdatedAt", "DeletedAt")
+            VALUES ({empty}, {owner}, 'Vacía', 'A2', 'Tema', 'Objetivo', NULL, {timestamp}, {timestamp}, NULL),
+                   ({complete}, {owner}, 'Completa', 'B1', 'Tema', 'Objetivo', 999, {timestamp}, {timestamp}, NULL),
+                   ({incomplete}, {owner}, 'Incompleta', 'B1', 'Tema', 'Objetivo', 120, {timestamp}, {timestamp}, NULL),
+                   ({trashed}, {owner}, 'Papelera', 'B2', 'Tema', 'Objetivo', 7, {timestamp}, {timestamp}, {timestamp});
+            INSERT INTO "Activities" ("Id", "LessonId", "Type", "Title", "Instructions", "Content", "Order", "EstimatedDuration")
+            VALUES ({Guid.NewGuid()}, {complete}, 'Writing', 'A', 'Instrucciones', CAST({json} AS jsonb), 0, 10),
+                   ({Guid.NewGuid()}, {complete}, 'Writing', 'B', 'Instrucciones', CAST({json} AS jsonb), 1, 20),
+                   ({Guid.NewGuid()}, {incomplete}, 'Writing', 'A', 'Instrucciones', CAST({json} AS jsonb), 0, NULL),
+                   ({Guid.NewGuid()}, {incomplete}, 'Writing', 'B', 'Instrucciones', CAST({json} AS jsonb), 1, 15),
+                   ({Guid.NewGuid()}, {trashed}, 'Writing', 'A', 'Instrucciones', CAST({json} AS jsonb), 0, 5);
+            """);
+
+        await migrator.MigrateAsync();
+        db.ChangeTracker.Clear();
+
+        // 0 without activities, the sum when every activity has a duration, and null while any of
+        // them lacks one. The old manual estimates are discarded, never spread across activities.
+        Assert.Equal(0, (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == empty)).EstimatedDuration);
+        Assert.Equal(30, (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == complete)).EstimatedDuration);
+        Assert.Null((await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == incomplete)).EstimatedDuration);
+        // Trashed lessons follow the same rule, so restoring one does not change it.
+        Assert.Equal(5, (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == trashed)).EstimatedDuration);
+
+        // The constraint now admits 0, keeps null, and still rejects negatives.
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Lessons" SET "EstimatedDuration" = NULL WHERE "Id" = {empty}
+            """);
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Lessons" SET "EstimatedDuration" = 0 WHERE "Id" = {empty}
+            """);
+        await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE "Lessons" SET "EstimatedDuration" = -1 WHERE "Id" = {empty}
+            """));
+    }
 }

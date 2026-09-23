@@ -47,7 +47,10 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
 ## SPEC 02 (editor de actividades MVP) — en curso
 
 Estado detallado y punto de reanudación: `.workbuddy-ai/memory/2026-09-23.md` (última sección).
-Resumen: rama `spec-02-editor-de-actividades-mvp`, modo `step`, etapas **1 y 2 de 10 hechas**
-(dominio). Siguiente: **etapa 3**, la migración `AddCalculatedLessonDuration`. Baseline:
-`Domain.Tests` 55/55 verde; `Integration.Tests` 42/78 — los 36 fallos son solo
-`CK_Lesson_Duration` rechazando el total `0`, y la etapa 3 los resuelve.
+Resumen: rama `spec-02-editor-de-actividades-mvp`, modo `step`, etapas **1–3 de 10 hechas**
+(dominio + migración). Siguiente: **etapa 4**, lectura con el total (`LessonListItemDto`).
+Baseline: `Domain.Tests` 55/55 ✓ y `Integration.Tests` 79/79 ✓.
+
+**Aislamiento de los tests de integración**: `IClassFixture` crea una base `pf_test_*` por **clase**
+de test, no por test. Dos tests que insertan filas en la misma clase se contaminan entre sí
+(rompen los `CountAsync`); ponlos en clases distintas.
