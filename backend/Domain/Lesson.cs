@@ -11,7 +11,8 @@ public sealed class Lesson
     private readonly List<Activity> _activities = [];
     private Lesson() { }
 
-    public Lesson(Guid userId, string title, LessonLevel level, string topic, string objective)
+    public Lesson(Guid userId, string title, LessonLevel level, string topic, string objective,
+        IReadOnlyList<ActivityDraft>? activities = null)
     {
         if (userId == Guid.Empty) throw new ArgumentException("A lesson needs an owner.", nameof(userId));
         if (!Enum.IsDefined(level)) throw new ArgumentException("Unsupported level.", nameof(level));
@@ -21,8 +22,11 @@ public sealed class Lesson
         Topic = Rules.Text(topic, 200, nameof(topic));
         Objective = Rules.Text(objective, 2000, nameof(objective));
         Level = level;
-        // The total is never supplied by the caller: a new lesson has no activities, so it starts at 0.
-        RecalculateDuration();
+        // The total is never supplied by the caller: it is derived from the activities the lesson is
+        // created with, and a lesson created without any starts at 0.
+        if (activities is { Count: > 0 }) ApplyActivities(activities);
+        else RecalculateDuration();
+        // Creating a lesson and its activities is one write, so it is also one instant.
         CreatedAt = UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -82,8 +86,9 @@ public sealed class Lesson
     // activities that keep their Id, creates the ones without one, removes the ones the request
     // omits, and assigns consecutive order from zero following the request order.
     // The whole set is validated before anything changes, so a rejected save leaves the lesson
-    // exactly as it was.
-    public void ApplyActivities(IReadOnlyList<ActivityDraft> activities)
+    // exactly as it was. Returns the newly created activities so the caller can register them with
+    // the persistence layer.
+    public IReadOnlyList<Activity> ApplyActivities(IReadOnlyList<ActivityDraft> activities)
     {
         EnsureActive();
         ArgumentNullException.ThrowIfNull(activities);
@@ -110,6 +115,7 @@ public sealed class Lesson
         var total = TotalOf(validated.Select(x => (int?)x.Duration));
 
         var applied = new List<Activity>(validated.Count);
+        var created = new List<Activity>();
         for (var order = 0; order < validated.Count; order++)
         {
             var (draft, title, instructions, duration) = validated[order];
@@ -122,7 +128,9 @@ public sealed class Lesson
             }
             else
             {
-                applied.Add(new Activity(Id, title, instructions, draft.Content, order, duration));
+                var activity = new Activity(Id, title, instructions, draft.Content, order, duration);
+                created.Add(activity);
+                applied.Add(activity);
             }
         }
 
@@ -130,6 +138,17 @@ public sealed class Lesson
         _activities.AddRange(applied);
         EstimatedDuration = total;
         UpdatedAt = DateTimeOffset.UtcNow;
+        return created;
+    }
+
+    // The unique (LessonId, Order) index admits no transient collisions, so a reorder parks the
+    // persisted activities above every final position first and assigns the final order afterwards.
+    // Both halves run inside the same transaction, so no reader observes the parked positions.
+    public void ParkActivityOrder(int finalCount)
+    {
+        EnsureActive();
+        var offset = Math.Max(_activities.Count, finalCount) + 1;
+        foreach (var activity in _activities) activity.SetOrder(offset + activity.Order);
     }
 
     private void EnsureActive()

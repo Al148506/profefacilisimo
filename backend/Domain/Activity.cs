@@ -8,6 +8,22 @@ public abstract record ActivityContent
 {
     public abstract ActivityType Type { get; }
     public abstract void Validate();
+
+    // The declared type is the authoritative discriminator: the concrete record is chosen from it,
+    // so a redundant `type` left inside legacy JSON can never contradict the stored column.
+    public static ActivityContent Read(ActivityType type, JsonElement content)
+    {
+        ActivityContent? value = type switch
+        {
+            ActivityType.Speaking => content.Deserialize<SpeakingContent>(ContentJson.Options),
+            ActivityType.Reading => content.Deserialize<ReadingContent>(ContentJson.Options),
+            ActivityType.Writing => content.Deserialize<WritingContent>(ContentJson.Options),
+            ActivityType.VocabularyGrammar => content.Deserialize<VocabularyGrammarContent>(ContentJson.Options),
+            _ => throw new ArgumentOutOfRangeException(nameof(type), "Unsupported activity type.")
+        };
+        return value ?? throw new JsonException("The content does not match the declared activity type.");
+    }
+
     protected static void Questions(IReadOnlyList<string>? questions)
     {
         if (questions is null || questions.Count is < 1 or > 50)
@@ -108,14 +124,11 @@ public sealed class Activity
         EstimatedDuration = EstimatedDuration
     };
 
-    public ActivityContent ReadContent() => Type switch
+    public ActivityContent ReadContent()
     {
-        ActivityType.Speaking => JsonSerializer.Deserialize<SpeakingContent>(Content, ContentJson.Options)!,
-        ActivityType.Reading => JsonSerializer.Deserialize<ReadingContent>(Content, ContentJson.Options)!,
-        ActivityType.Writing => JsonSerializer.Deserialize<WritingContent>(Content, ContentJson.Options)!,
-        ActivityType.VocabularyGrammar => JsonSerializer.Deserialize<VocabularyGrammarContent>(Content, ContentJson.Options)!,
-        _ => throw new InvalidOperationException("Unsupported activity type.")
-    };
+        using var document = JsonDocument.Parse(Content);
+        return ActivityContent.Read(Type, document.RootElement);
+    }
 }
 
 internal static class ContentJson

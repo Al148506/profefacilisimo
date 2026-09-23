@@ -240,7 +240,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
     public async Task WritesRequireAuthenticatedValidSubject(string? sub)
     {
         using var client = Client(sub);
-        var body = new SaveLessonRequest("Título", "B1", "Tema", "Objetivo");
+        var body = new SaveLessonRequest("Título", "B1", "Tema", "Objetivo", null);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/lessons", body)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PutAsJsonAsync($"/api/lessons/{Guid.NewGuid()}", body)).StatusCode);
     }
@@ -259,7 +259,8 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
             title = "  Nueva  ", level, topic = " Tema ", objective = " Objetivo ",
             userId = Guid.NewGuid(), id = Guid.NewGuid(), deletedAt = start,
             createdAt = start.AddYears(-1), updatedAt = start.AddYears(-1), estimatedDuration = 99,
-            activities = new[] { new { title = "Inyectada" } }
+            // The server ignores protected fields and calculates the total; the set travels empty.
+            activities = Array.Empty<object>()
         };
         var response = await client.PostAsJsonAsync("/api/lessons", payload);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -322,7 +323,8 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         var (owner, _) = await Seed();
         using var client = Client(owner.ToString());
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/lessons", new { })).StatusCode);
-        var body = new SaveLessonRequest(new string('t', 200), "A2", new string('t', 200), new string('o', 2000));
+        // An empty set is valid on both verbs, so the same body serves the create and the update.
+        var body = new SaveLessonRequest(new string('t', 200), "A2", new string('t', 200), new string('o', 2000), []);
         var response = await client.PostAsJsonAsync("/api/lessons", body);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var detail = (await response.Content.ReadFromJsonAsync<LessonDetailsDto>())!;
@@ -345,13 +347,18 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
             """).ToArrayAsync();
         var createdAt = (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == lesson.Id)).CreatedAt;
         using var client = Client(owner.ToString());
+        // The editor re-sends the activities it loaded, unchanged: only the metadata is edited here.
+        var loaded = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{lesson.Id}"))!;
+        var activities = loaded.Activities
+            .Select(x => new LessonActivityInput(x.Id, x.Type, x.Title, x.Instructions, x.EstimatedDuration!.Value, x.Content))
+            .ToArray();
         var start = DateTimeOffset.UtcNow.AddSeconds(-1);
         var response = await client.PutAsJsonAsync($"/api/lessons/{lesson.Id}", new
         {
             title = " Actualizada ", level = "B2", topic = " Nuevo tema ", objective = " Nuevo objetivo ",
             userId = Guid.NewGuid(), id = Guid.NewGuid(), estimatedDuration = 999,
             createdAt = start.AddYears(-1), updatedAt = start.AddYears(-1), deletedAt = start,
-            activities = Array.Empty<object>()
+            activities
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var detail = (await response.Content.ReadFromJsonAsync<LessonDetailsDto>())!;
@@ -362,6 +369,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.Equal(20, detail.EstimatedDuration);
         Assert.Null(detail.DeletedAt);
         Assert.Equal(2, detail.Activities.Count);
+        Assert.Equal(new[] { 0, 1 }, detail.Activities.Select(x => x.Order));
         db.ChangeTracker.Clear();
         Assert.Equal(owner, (await db.Lessons.SingleAsync(x => x.Id == lesson.Id)).UserId);
         Assert.Equal(before, await db.Database.SqlQueryRaw<string>("""
@@ -369,8 +377,11 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
             """).ToArrayAsync());
         // Last write wins, with no version headers or tokens.
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync($"/api/lessons/{lesson.Id}",
-            new SaveLessonRequest("Última", "A2", "Tema", "Objetivo"))).StatusCode);
+            new SaveLessonRequest("Última", "A2", "Tema", "Objetivo", activities))).StatusCode);
         Assert.Equal("Última", (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{lesson.Id}"))!.Title);
+        Assert.Equal(before, await db.Database.SqlQueryRaw<string>("""
+            SELECT to_jsonb(a)::text AS "Value" FROM "Activities" a ORDER BY a."Id"
+            """).ToArrayAsync());
     }
 
     [Fact]
@@ -385,7 +396,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         using var client = Client(owner.ToString());
         foreach (var id in new[] { lessons[0].Id, others[0].Id, Guid.NewGuid() })
         {
-            var response = await client.PutAsJsonAsync($"/api/lessons/{id}", new SaveLessonRequest("Cambio", "B1", "Tema", "Objetivo"));
+            var response = await client.PutAsJsonAsync($"/api/lessons/{id}", new SaveLessonRequest("Cambio", "B1", "Tema", "Objetivo", []));
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
             Assert.Equal("application/problem+json", response.Content.Headers.ContentType!.MediaType);
         }
@@ -393,7 +404,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.Equal("Privada", (await db.Lessons.AsNoTracking().SingleAsync(x => x.Id == others[0].Id)).Title);
         using var otherClient = Client(other.ToString());
         Assert.Equal(HttpStatusCode.NotFound, (await otherClient.PutAsJsonAsync($"/api/lessons/{lessons[0].Id}",
-            new SaveLessonRequest("Cambio", "B1", "Tema", "Objetivo"))).StatusCode);
+            new SaveLessonRequest("Cambio", "B1", "Tema", "Objetivo", []))).StatusCode);
     }
 
     [Theory]
@@ -471,8 +482,9 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         db.ChangeTracker.Clear();
         Assert.Equal(owner, (await db.Lessons.SingleAsync(x => x.Id == copy.Id)).UserId);
         Assert.All(await db.Activities.Where(x => x.LessonId == copy.Id).ToListAsync(), x => Assert.Equal(copy.Id, x.LessonId));
+        // The copy is edited with an empty set: the source stays untouched, which is what matters here.
         Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync(response.Headers.Location,
-            new SaveLessonRequest("Copia editada", "A2", "Otro tema", "Otro objetivo"))).StatusCode);
+            new SaveLessonRequest("Copia editada", "A2", "Otro tema", "Otro objetivo", []))).StatusCode);
         var unchanged = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{source.Id}"))!;
         Assert.Equal(original.Title, unchanged.Title);
         Assert.Equal(original.UpdatedAt, unchanged.UpdatedAt);
@@ -654,7 +666,7 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/lessons/{target.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsync($"/api/lessons/{target.Id}/duplicate", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync($"/api/lessons/{target.Id}",
-            new SaveLessonRequest("Cambio", "A2", "Tema", "Objetivo"))).StatusCode);
+            new SaveLessonRequest("Cambio", "A2", "Tema", "Objetivo", []))).StatusCode);
         start = DateTimeOffset.UtcNow.AddSeconds(-1);
         Assert.Equal(HttpStatusCode.NoContent, (await Transition(client, target.Id, "restore")).StatusCode);
         Assert.Empty(await List(client, "?state=trash"));
