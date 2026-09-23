@@ -34,6 +34,10 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
 - `Directory.Build.props` activa `TreatWarningsAsErrors`, `Nullable` e `ImplicitUsings` globalmente.
 - Tests: xUnit. `tests/Domain.Tests` referencia **solo** `backend/Domain` (no ve Application ni
   Infrastructure). `tests/Integration.Tests` usa PostgreSQL real, no EF InMemory.
+- **EF Core**: añadir hijos nuevos a un padre **ya existente** (`Unchanged`) los marca `Modified`, no
+  `Added`, porque las claves Guid son `ValueGeneratedOnAdd` y ya vienen puestas → genera `UPDATE` en
+  vez de `INSERT` → `DbUpdateConcurrencyException` (0 filas). Hay que añadirlos explícitamente
+  (`db.Activities.AddRange(...)`) o hacerlo dentro de un padre también nuevo.
 - Scripts de verificación (PowerShell, requieren el entorno del usuario): `scripts/Test.ps1`,
   `scripts/Test-E2E.ps1`.
 - Frontend: React + TypeScript + Vite, TanStack Query, React Hook Form, Zod.
@@ -47,9 +51,10 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
 ## SPEC 02 (editor de actividades MVP) — en curso
 
 Estado detallado y punto de reanudación: `.workbuddy-ai/memory/2026-09-23.md` (última sección).
-Resumen: rama `spec-02-editor-de-actividades-mvp`, modo `step`, etapas **1–3 de 10 hechas**
-(dominio + migración). Siguiente: **etapa 4**, lectura con el total (`LessonListItemDto`).
-Baseline: `Domain.Tests` 55/55 ✓ y `Integration.Tests` 79/79 ✓.
+Resumen: rama `spec-02-editor-de-actividades-mvp`, modo `step`, etapas **1–4 de 10 hechas**
+(dominio, migración y lectura). Siguiente: **etapa 5**, escritura POST/PUT con el conjunto completo
+(¡ojo al gotcha de EF de arriba!). Baseline: `Domain.Tests` 55/55 ✓, `Integration.Tests` 80/80 ✓,
+frontend 40/40 ✓.
 
 **Aislamiento de los tests de integración**: `IClassFixture` crea una base `pf_test_*` por **clase**
 de test, no por test. Dos tests que insertan filas en la misma clase se contaminan entre sí

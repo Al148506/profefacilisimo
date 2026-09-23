@@ -86,29 +86,36 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
     [Fact]
     public async Task ListAndDetailExposeTheCalculatedTotalOrNullWhenIncomplete()
     {
-        var (owner, lessons) = await Seed("Completa", "Incompleta", "Vacía");
-        using var scope = fixture.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var complete = await db.Lessons.SingleAsync(x => x.Id == lessons[0].Id);
-        complete.AddActivity("A", "Instrucciones", new WritingContent("Texto"), 10);
-        complete.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]), 20);
-        var incomplete = await db.Lessons.SingleAsync(x => x.Id == lessons[1].Id);
-        incomplete.AddActivity("A", "Instrucciones", new WritingContent("Texto"), 10);
-        incomplete.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]));
-        await db.SaveChangesAsync();
+        var owner = Guid.NewGuid();
+        Guid completeId, incompleteId, emptyId;
+        using (var scope = fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.Users.Add(new AppUser { Id = owner, UserName = owner.ToString() });
+            var complete = new Lesson(owner, "Completa", LessonLevel.B1, "Tema", "Objetivo");
+            complete.AddActivity("A", "Instrucciones", new WritingContent("Texto"), 10);
+            complete.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]), 20);
+            var incomplete = new Lesson(owner, "Incompleta", LessonLevel.B1, "Tema", "Objetivo");
+            incomplete.AddActivity("A", "Instrucciones", new WritingContent("Texto"), 10);
+            incomplete.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]));
+            var empty = new Lesson(owner, "Vacía", LessonLevel.A2, "Tema", "Objetivo");
+            db.Lessons.AddRange(complete, incomplete, empty);
+            await db.SaveChangesAsync();
+            (completeId, incompleteId, emptyId) = (complete.Id, incomplete.Id, empty.Id);
+        }
 
         using var client = Client(owner.ToString());
         var list = (await List(client)).ToDictionary(x => x.Id);
-        // The listing carries the persisted total: the sum when complete, null while incomplete and
-        // 0 for a lesson without activities.
-        Assert.Equal(30, list[complete.Id].EstimatedDuration);
-        Assert.Null(list[incomplete.Id].EstimatedDuration);
-        Assert.Equal(0, list[lessons[2].Id].EstimatedDuration);
+        // The listing carries the persisted total: the sum when complete, null while incomplete,
+        // and 0 for a lesson without activities.
+        Assert.Equal(30, list[completeId].EstimatedDuration);
+        Assert.Null(list[incompleteId].EstimatedDuration);
+        Assert.Equal(0, list[emptyId].EstimatedDuration);
 
-        var detail = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{complete.Id}"))!;
+        var detail = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{completeId}"))!;
         Assert.Equal(30, detail.EstimatedDuration);
-        Assert.Null((await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{incomplete.Id}"))!.EstimatedDuration);
-        Assert.Equal(0, (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{lessons[2].Id}"))!.EstimatedDuration);
+        Assert.Null((await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{incompleteId}"))!.EstimatedDuration);
+        Assert.Equal(0, (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{emptyId}"))!.EstimatedDuration);
     }
 
     [Theory]
