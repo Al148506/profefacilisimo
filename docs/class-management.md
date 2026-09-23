@@ -4,7 +4,7 @@
 1. Inicia sesión. **Mis clases** muestra tus clases activas, más recientes primero.
 2. Busca por título y combina con A2/B1/B2. Pulsa **Buscar**; **Limpiar filtros** vuelve al listado completo. Los filtros son locales, sin URL.
 3. **Crear clase** solicita título, nivel, tema y objetivo. Título/tema admiten 200 caracteres y objetivo 2000; se recortan espacios. No necesitas actividades.
-4. **Guardar** crea la clase y abre su editor. **Editar** modifica solo metadatos, sin alterar actividades ni duración.
+4. **Guardar** crea la clase y abre su editor. **Editar** modifica los metadatos y, desde SPEC 02, también las actividades y sus duraciones: ver [activity-editor.md](activity-editor.md).
 5. **Duplicar** copia los datos persistidos y actividades con nuevos IDs y abre la copia. Si falla la red, revisa el listado antes de repetir: podría haberse completado.
 6. **Enviar a papelera** pide confirmación y conserva clase/actividades.
 7. En **Papelera**, **Restaurar** pide confirmación y conserva los IDs. No hay caducidad automática.
@@ -14,7 +14,7 @@
 - Guardado explícito, sin autoguardado ni borradores en almacenamiento local.
 - Aviso de descarte al volver desde el editor o pulsar la marca. Cerrar/recargar puede mostrar el aviso nativo; no se interceptan todos los mecanismos de navegación.
 - Cambios entre pestañas usan last write wins, sin versiones ni detección de conflictos.
-- Sin paginación ni editor de actividades/duración (SPEC 02).
+- Sin paginación. El editor de actividades y el total calculado por duración son de SPEC 02: ver [activity-editor.md](activity-editor.md).
 - Sin reintentos automáticos de escrituras ante errores de red; renovación de sesión una vez ante un 401 explícito.
 
 ## Desarrollo y pruebas

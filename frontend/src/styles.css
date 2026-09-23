@@ -46,7 +46,7 @@ select { font: inherit; width: 100%; border: 1px solid #c5d1c5; border-radius: 9
 .lesson-session { border-top: 1px solid #dfe5d8; margin-top: 28px; padding-top: 14px; }
 @media (max-width: 600px) { .lesson-filters { flex-direction: column; align-items: stretch; } .lesson-filters > div { flex-basis: auto; } }
 
-.lesson-editor { width: min(100%, 650px); }
+.lesson-editor { width: min(100%, 720px); }
 .lesson-editor fieldset { display: flex; flex-direction: column; border: 0; padding: 0; margin: 0; min-width: 0; }
 textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid #c5d1c5; border-radius: 9px; padding: 12px; color: #173b37; background: white; }
 .editor-back { margin-top: 18px; }
@@ -58,3 +58,39 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid #c5d1
 .lesson-actions .duplicate-button, .lesson-actions a { margin: 0; }
 button.danger { background: #8c3033; border-color: #8c3033; }
 @media (max-width: 600px) { .lesson-actions { align-items: stretch; flex-direction: column; } }
+
+/* Higher specificity than `.lesson-editor fieldset`, which resets border and padding. */
+.lesson-editor fieldset.activity-section { display: block; border-top: 1px solid #dfe5d8; margin-top: 28px; padding-top: 18px; }
+.activity-section legend { font-family: Manrope, system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
+.activity-total { font-weight: 600; color: #3c5a4e; margin: 12px 0 18px; }
+.activity-add { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
+.activity-add > div { flex: 1 1 200px; }
+.activity-add button { flex: 0 0 auto; }
+.activity-empty { padding: 18px; background: #f7f8f2; border: 1px dashed #c5d1c5; border-radius: 12px; margin-bottom: 20px; }
+.activity-list { list-style: none; padding: 0; display: grid; gap: 12px; margin-bottom: 22px; }
+.activity-item { border: 1px solid #dfe5d8; border-radius: 12px; padding: 12px; }
+.activity-item.has-error { border-color: #d9a5a7; background: #fdf7f7; }
+.activity-item-main { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.activity-select { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: 1 1 240px; background: #f7f8f2; border: 1px solid #dfe5d8; color: #173b37; text-align: left; padding: 12px 14px; }
+.activity-select:hover { background: #eef2e4; }
+.activity-select[aria-pressed="true"] { background: #eef4d9; border-color: #97b54d; box-shadow: inset 4px 0 0 #234e41; }
+.activity-position { font-weight: 700; color: #607448; }
+.activity-name { flex: 1 1 120px; overflow-wrap: anywhere; }
+.activity-type { font-size: 12px; font-weight: 700; background: #f1f5e6; color: #286354; padding: 3px 9px; border-radius: 6px; }
+.activity-duration { font-size: 13px; font-weight: 600; color: #3c5a4e; }
+.activity-order { display: flex; gap: 8px; }
+.activity-error { margin: 10px 0 0; font-size: 13px; }
+.activity-form { border: 1px solid #dfe5d8; border-radius: 12px; padding: 20px; background: #fbfcf7; }
+.activity-form h3 { font-size: 16px; margin: 0 0 16px; }
+.activity-field { display: flex; flex-direction: column; }
+.activity-rows { border-top: 1px solid #e6ebdd; margin-top: 12px; padding-top: 14px; }
+.activity-rows-legend { font-weight: 700; font-size: 14px; color: #3c5a4e; margin: 0 0 10px; }
+.activity-row { display: flex; flex-direction: column; border-bottom: 1px solid #eef1e8; padding-bottom: 10px; margin-bottom: 10px; }
+.activity-row:last-of-type { border-bottom: 0; }
+.activity-rows > button { align-self: flex-start; }
+@media (max-width: 600px) {
+  .activity-add, .activity-item-main { flex-direction: column; align-items: stretch; }
+  .activity-add > div, .activity-select { flex-basis: auto; }
+  .activity-order, .activity-remove { width: 100%; }
+  .activity-order button { flex: 1 1 0; }
+}
