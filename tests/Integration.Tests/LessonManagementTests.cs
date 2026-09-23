@@ -83,6 +83,34 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.Empty(await List(emptyClient));
     }
 
+    [Fact]
+    public async Task ListAndDetailExposeTheCalculatedTotalOrNullWhenIncomplete()
+    {
+        var (owner, lessons) = await Seed("Completa", "Incompleta", "Vacía");
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var complete = await db.Lessons.SingleAsync(x => x.Id == lessons[0].Id);
+        complete.AddActivity("A", "Instrucciones", new WritingContent("Texto"), 10);
+        complete.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]), 20);
+        var incomplete = await db.Lessons.SingleAsync(x => x.Id == lessons[1].Id);
+        incomplete.AddActivity("A", "Instrucciones", new WritingContent("Texto"), 10);
+        incomplete.AddActivity("B", "Instrucciones", new SpeakingContent(["Pregunta"]));
+        await db.SaveChangesAsync();
+
+        using var client = Client(owner.ToString());
+        var list = (await List(client)).ToDictionary(x => x.Id);
+        // The listing carries the persisted total: the sum when complete, null while incomplete and
+        // 0 for a lesson without activities.
+        Assert.Equal(30, list[complete.Id].EstimatedDuration);
+        Assert.Null(list[incomplete.Id].EstimatedDuration);
+        Assert.Equal(0, list[lessons[2].Id].EstimatedDuration);
+
+        var detail = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{complete.Id}"))!;
+        Assert.Equal(30, detail.EstimatedDuration);
+        Assert.Null((await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{incomplete.Id}"))!.EstimatedDuration);
+        Assert.Equal(0, (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{lessons[2].Id}"))!.EstimatedDuration);
+    }
+
     [Theory]
     [InlineData("%")]
     [InlineData("_")]

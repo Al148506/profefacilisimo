@@ -4,6 +4,7 @@ export type LessonLevel = 'A2' | 'B1' | 'B2';
 export type LessonFilters = { search: string; level: LessonLevel | '' };
 export type LessonListItem = {
   id: string; title: string; level: LessonLevel; topic: string;
+  estimatedDuration: number | null;
   updatedAt: string; deletedAt: string | null;
 };
 
@@ -23,7 +24,7 @@ export async function listLessons(filters: LessonFilters, signal?: AbortSignal, 
 }
 
 export type LessonDetails = LessonListItem & {
-  objective: string; estimatedDuration: number | null; createdAt: string;
+  objective: string; createdAt: string;
   activities: { id: string; type: string; title: string; instructions: string; content: unknown; order: number; estimatedDuration: number | null }[];
 };
 export const lessonDetailKey = (userId: string, id: string) => ['lessons', userId, 'detail', id] as const;
