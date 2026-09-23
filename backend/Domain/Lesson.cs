@@ -97,4 +97,9 @@ internal static class Rules
 
     public static int? Duration(int? value) => value is <= 0
         ? throw new ArgumentOutOfRangeException(nameof(value), "Duration must be positive minutes.") : value;
+
+    // Editor writes always carry a duration, unlike legacy rows where null is preserved.
+    public static int RequiredDuration(int value) => value <= 0
+        ? throw new ArgumentOutOfRangeException(nameof(value), "Duration must be a positive whole number of minutes.")
+        : value;
 }

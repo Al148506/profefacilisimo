@@ -62,6 +62,24 @@ public sealed class Activity
     public int Order { get; private set; }
     public int? EstimatedDuration { get; private set; }
 
+    // Editor write path: the activity keeps its identity (Id, LessonId, Order) and only its
+    // editable data changes. Everything is validated before anything is assigned, so a rejected
+    // update never leaves the activity half-modified. The declared type is the content's own
+    // type, so an incompatible type/content pair cannot be stored.
+    public void Update(string title, string instructions, ActivityContent content, int estimatedDuration)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        content.Validate();
+        var validTitle = Rules.Text(title, 200, nameof(title));
+        var validInstructions = Rules.Text(instructions, 2000, nameof(instructions));
+        var validDuration = Rules.RequiredDuration(estimatedDuration);
+        Type = content.Type;
+        Content = JsonSerializer.Serialize(content, content.GetType(), ContentJson.Options);
+        Title = validTitle;
+        Instructions = validInstructions;
+        EstimatedDuration = validDuration;
+    }
+
     // Copy the stored JSON verbatim; do not reinterpret or normalize legacy content.
     internal Activity CopyTo(Guid lessonId) => new()
     {
