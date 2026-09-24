@@ -48,18 +48,19 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
      `project.assets.json` guarda un `projectPath` absoluto; el fallback suele funcionar (carpeta NuGet
      compartida) pero no está garantizado.
   2. `.tools/local-settings.json` → copiar. Lo necesitan los tests de integración y `dotnet ef`.
-  3. `frontend/node_modules` → `cp -r` desde el checkout principal (186 MB / 11 213 ficheros, unos
-     minutos, sin red). `npm ci` es la alternativa.
-- **`git worktree add` es seguro con el checkout principal ocupado** por otra sesión. Antes de trabajar,
-  comprobar en qué rama está el checkout principal: si está en una rama de flujo con ficheros sin
-  commitear, ir a un worktree.
-- **Aislamiento**: los worktrees aíslan el sistema de ficheros, no la sesión. Los subagentes de una misma
-  sesión comparten `cwd` y checkout: el paralelismo real exige **una sesión por worktree** (o ejecutar los
-  carriles en secuencia sobre ramas).
+  3. `frontend/node_modules` → `cp -r` desde el checkout principal (verificado: 186 MB / 11 213
+     ficheros, unos minutos, sin red, el recuento final coincide). `npm ci` es la alternativa.
+- **`git worktree add` es seguro con el checkout principal ocupado** por otra sesión: no toca su árbol de
+  trabajo. Antes de trabajar, comprobar en qué rama está el checkout principal: si está en una rama de
+  flujo con ficheros sin commitear, hay que ir a un worktree, no tocar el checkout.
+- **Aislamiento**: los worktrees aíslan el sistema de ficheros, no la sesión del agente. Los subagentes de
+  una misma sesión comparten `cwd` y checkout, así que el paralelismo real exige **una sesión por
+  worktree** (o ejecutar los carriles en secuencia sobre ramas).
 - **Recursos de escritor único** (specs con backend): `backend/Infrastructure/Migrations/` y
-  `AppDbContextModelSnapshot.cs` — el snapshot se regenera entero y el conflicto no se resuelve a mano.
-- **Playwright y puertos**: `playwright test` arranca Vite por su cuenta (`webServer`); la API de pruebas
-  usa el 5080. Serializar el E2E entre agentes.
+  `AppDbContextModelSnapshot.cs` no admiten dos escritores — el snapshot se regenera entero y el conflicto
+  no se puede resolver a mano.
+- **Playwright y puertos**: `playwright test` arranca Vite por su cuenta (`webServer`) y la API de pruebas
+  usa el 5080. Dos agentes ejecutando E2E a la vez chocan: serializar el E2E.
 - Limpieza: `git worktree remove <ruta>` + `git worktree prune`. Nunca `rm -rf` sobre un worktree (deja
   metadatos huérfanos en `.git/worktrees`).
 
@@ -75,11 +76,14 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
 ## Flujo de especificaciones
 
 - Las specs viven en `specs/` con estado en la cabecera (`**Estado:**`). `specs/.spec-config.yml` tiene
-  `AutoCreateBranch: true`. Las specs aprobadas se implementan con el skill `spec-impl`.
-- **Specs paralelas** (`*-parallel.md`): `spec-impl` derivaría la rama del nombre del fichero, pero §5 del
-  plan nombra sus propias ramas. **Manda el plan**: rama de integración `spec-NN-slug` desde `main`, y una
-  rama `spec-NN-slug--<flujo>` por flujo. Sin worktree si hay una sola sesión (el §1 del plan lo autoriza:
-  flujos en secuencia sobre ramas). El estado de la spec paralela es independiente del de la original.
+  `AutoCreateBranch: true`. Las specs aprobadas se implementan con el skill `spec-impl`, en rama
+  `spec-NN-slug`.
+- **Specs paralelas** (las `*-parallel.md` que genera `multi-ag-spec`): `spec-impl` derivaría la rama del
+  nombre del fichero (`spec-03-reproductor-de-clases-parallel`), pero §5 del plan nombra sus propias
+  ramas. **Manda el plan**: rama de integración `spec-NN-slug` desde `main`, y una rama
+  `spec-NN-slug--<flujo>` por flujo. Sin worktree si hay una sola sesión — el propio §1 del plan lo
+  autoriza (ejecutar los flujos en secuencia sobre ramas). El estado de la spec paralela es independiente
+  del de la original: aprobar una no aprueba la otra.
 
 ## SPEC 02 (editor de actividades MVP) — cerrada y validada 2026-09-23
 
@@ -110,20 +114,33 @@ cd frontend && npx playwright test --reporter=list
 - `getByText` en strict mode puede casar dos nodos si el total coincide con una duración de actividad:
   anclar al nodo correcto (`getByText('Duración total:')`, `.activity-duration`).
 - Los specs E2E escriben capturas en `.tools/` (ignorado por git): convención del repo.
+- **`tsconfig.json` del frontend solo incluye `src`**: `e2e/` queda fuera de `tsc -b`.
 - Si la ejecución falla deja muchos artefactos en `frontend/test-results/`: borrarlos en un turno aparte
   (el sandbox bloquea borrados masivos >50 ficheros en el mismo turno). Playwright lo vacía solo cuando la
   ejecución termina bien.
+- **El entorno crea commits automáticamente.** Durante una sesión aparecieron commits que el agente no
+  hizo; no asumir que el árbol limpio significa que no se ha commiteado nada.
 
-## SPEC 03 — estado
+## Tests de componente: jsdom no implementa el scroll
 
-`spec-03-reproductor-de-clases` es la rama de **integración**; cada flujo tiene la suya y se fusionan en
-el orden `contract → activity-view → player → entry-styles → docs`. El plan completo está en
-`specs/03-reproductor-de-clases-parallel.md`.
+`jsdom` define `Element.prototype.scrollTop` (accesorio) pero **no** `Element.prototype.scrollTo` ni
+`scrollIntoView`; `window.scrollTo` sí existe. Usar `elemento.scrollTop = 0` en el código de producción
+(funciona en navegador y en el test) y verificar el reinicio con un accesorio propio sobre el elemento
+(`Object.defineProperty(el, 'scrollTop', { set })`), que es determinista.
 
-- **Flujo B** (ActivityView) y **Flujo A** (núcleo del reproductor) hechos; B fusionado en integración
-  (commit `e1954f4`).
-- **Flujo C** (`--entry-styles`) implementado: «Iniciar clase» en el listado + 40 líneas nuevas de
+## SPEC 03 — estado de las ramas
+
+`spec-03-reproductor-de-clases` es la rama de **integración**; cada flujo tiene la suya
+(`--contract`, `--activity-view`, `--player`, `--entry-styles`, `--docs`) y se fusionan en ese orden. El
+plan completo está en `specs/03-reproductor-de-clases-parallel.md`.
+
+- **`contract` y `activity-view` (B) fusionados** en integración (commit `e1954f4`).
+- **Flujo A (`--player`) implementado** — `LessonPlayerPage.tsx` (191 líneas), `player-position.ts` (51)
+  y sus dos suites (405 líneas). **Sí registra la ruta** `/lessons/:id/play` en `App.tsx`.
+- **Flujo C (`--entry-styles`) implementado**: «Iniciar clase» en el listado + 40 líneas nuevas de
   estilos del reproductor. `tsc`, `eslint`, frontend 70/70 ✓. Queda el criterio de 390 px para I4.
+- **`D:/Freelance/pf-wt-contract` tiene un stub de `ActivityView.tsx` sin commitear** (1118 bytes). Si se
+  commitea y fusiona dará «both added» contra la implementación del Flujo B: **gana B**.
 - **`ActivityView.tsx` y `styles.css` son recursos de escritor único** del plan (B y C respectivamente);
   A solo los lee.
 - **Clases del reproductor = listas de C3 de la spec**, no del marcado: 15 son clases CSS y
@@ -131,5 +148,21 @@ el orden `contract → activity-view → player → entry-styles → docs`. El p
   `player-instructions` es `data-testid`; la clase de las instrucciones es `player-activity-instructions`.
 - **C3 y C5 viven en la fila «C3 · Frontera DOM/CSS» de la tabla de la spec** (línea ~88), no en un
   apartado `## 3`: buscar por el nombre de la clase, no por el número de sección.
-- Flujo C = `LessonsPage.tsx`, `LessonsPage.test.tsx`, `styles.css`; rama
-  `spec-03-reproductor-de-clases--entry-styles`.
+
+## El bug «Iniciar clase → Página no encontrada» (2026-09-24)
+
+**Síntoma**: pulsar «Iniciar clase» llevaba a `/lessons/:id/play` y respondía «Página no encontrada»
+(el comodín `path="*"` de `App.tsx`).
+
+**Causa**: **el Flujo A no estaba fusionado**. El enlace lo añadió el Flujo C, pero la `<Route>` la
+registra quien la sirve, y esa rama (`--player`) estaba sin fusionar. El checkout principal corría en
+`--entry-styles`, cuyo `App.tsx` aún no conocía la ruta. La implementación existía y estaba probada: era
+un fallo de **integración**, no de código.
+
+**Descartadas**: la ruta no estaba mal escrita, el componente no estaba montado en otro sitio y Vite no
+tenía nada que recargar (reiniciarlo no habría arreglado nada: el módulo no existía en el árbol).
+
+**Lección (aplicable a toda spec paralela)**: mientras los flujos vivan en ramas separadas, un enlace
+puede existir sin su ruta. Los tests de componente verdes por separado **no** lo detectan — cada suite
+prueba su mitad. Es exactamente el «Riesgo I2» de §6 del plan: hay que comprobarlo en navegador real.
+Para reproducirlo rápido: `curl -s http://localhost:5173/src/App.tsx | grep play`.
