@@ -671,3 +671,7 @@ Consulta [la guía de implementación y pruebas](docs/phase-1.md) para arrancar 
 
 ## Gestión de clases — SPEC 01
 Consulta [la guía de gestión de clases](docs/class-management.md) para crear, editar, duplicar, restaurar y eliminar clases, conocer los límites del MVP y ejecutar sus pruebas.
+
+
+## Editor de actividades — SPEC 02
+Consulta [la guía del editor de actividades](docs/activity-editor.md) para agregar, editar, quitar y reordenar actividades, conocer las reglas de duración y contenido, sus decisiones técnicas y las dependencias pendientes del backend.

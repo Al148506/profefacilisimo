@@ -2,12 +2,17 @@ namespace Profefacilisimo.Domain;
 
 public enum LessonLevel { A2, B1, B2 }
 
+// One activity as requested by an editor save: a null Id means "new", and an existing Id must
+// belong to the lesson being saved. The whole set travels in a single request.
+public sealed record ActivityDraft(Guid? Id, string Title, string Instructions, ActivityContent Content, int EstimatedDuration);
+
 public sealed class Lesson
 {
     private readonly List<Activity> _activities = [];
     private Lesson() { }
 
-    public Lesson(Guid userId, string title, LessonLevel level, string topic, string objective, int? estimatedDuration = null)
+    public Lesson(Guid userId, string title, LessonLevel level, string topic, string objective,
+        IReadOnlyList<ActivityDraft>? activities = null)
     {
         if (userId == Guid.Empty) throw new ArgumentException("A lesson needs an owner.", nameof(userId));
         if (!Enum.IsDefined(level)) throw new ArgumentException("Unsupported level.", nameof(level));
@@ -17,7 +22,11 @@ public sealed class Lesson
         Topic = Rules.Text(topic, 200, nameof(topic));
         Objective = Rules.Text(objective, 2000, nameof(objective));
         Level = level;
-        EstimatedDuration = Rules.Duration(estimatedDuration);
+        // The total is never supplied by the caller: it is derived from the activities the lesson is
+        // created with, and a lesson created without any starts at 0.
+        if (activities is { Count: > 0 }) ApplyActivities(activities);
+        else RecalculateDuration();
+        // Creating a lesson and its activities is one write, so it is also one instant.
         CreatedAt = UpdatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -65,10 +74,81 @@ public sealed class Lesson
         EnsureActive();
         const string suffix = " (copia)";
         var title = Title[..Math.Min(Title.Length, 200 - suffix.Length)] + suffix;
-        var copy = new Lesson(UserId, title, Level, Topic, Objective, EstimatedDuration);
+        var copy = new Lesson(UserId, title, Level, Topic, Objective);
         foreach (var activity in _activities)
             copy._activities.Add(activity.CopyTo(copy.Id));
+        // The copy holds the same activities, so the total stays coherent with them.
+        copy.RecalculateDuration();
         return copy;
+    }
+
+    // Applies the complete activity set of an editor save: validates identity, updates the
+    // activities that keep their Id, creates the ones without one, removes the ones the request
+    // omits, and assigns consecutive order from zero following the request order.
+    // The whole set is validated before anything changes, so a rejected save leaves the lesson
+    // exactly as it was. Returns the newly created activities so the caller can register them with
+    // the persistence layer.
+    public IReadOnlyList<Activity> ApplyActivities(IReadOnlyList<ActivityDraft> activities)
+    {
+        EnsureActive();
+        ArgumentNullException.ThrowIfNull(activities);
+
+        var persisted = _activities.ToDictionary(x => x.Id);
+        var requested = new HashSet<Guid>();
+        var validated = new List<(ActivityDraft Draft, string Title, string Instructions, int Duration)>(activities.Count);
+
+        foreach (var draft in activities)
+        {
+            ArgumentNullException.ThrowIfNull(draft);
+            if (draft.Id is { } id)
+            {
+                // A repeated, foreign or unknown Id is never treated as a new activity.
+                if (!requested.Add(id)) throw new ArgumentException("The same activity appears more than once.", nameof(activities));
+                if (!persisted.ContainsKey(id)) throw new ArgumentException("The activity does not belong to this lesson.", nameof(activities));
+            }
+            var (title, instructions, duration) =
+                Activity.ValidateEditableData(draft.Title, draft.Instructions, draft.Content, draft.EstimatedDuration);
+            validated.Add((draft, title, instructions, duration));
+        }
+
+        // Derived from the requested set, so an overflow is reported before anything changes.
+        var total = TotalOf(validated.Select(x => (int?)x.Duration));
+
+        var applied = new List<Activity>(validated.Count);
+        var created = new List<Activity>();
+        for (var order = 0; order < validated.Count; order++)
+        {
+            var (draft, title, instructions, duration) = validated[order];
+            if (draft.Id is { } id)
+            {
+                var existing = persisted[id];
+                existing.Update(title, instructions, draft.Content, duration);
+                existing.SetOrder(order);
+                applied.Add(existing);
+            }
+            else
+            {
+                var activity = new Activity(Id, title, instructions, draft.Content, order, duration);
+                created.Add(activity);
+                applied.Add(activity);
+            }
+        }
+
+        _activities.Clear();
+        _activities.AddRange(applied);
+        EstimatedDuration = total;
+        UpdatedAt = DateTimeOffset.UtcNow;
+        return created;
+    }
+
+    // The unique (LessonId, Order) index admits no transient collisions, so a reorder parks the
+    // persisted activities above every final position first and assigns the final order afterwards.
+    // Both halves run inside the same transaction, so no reader observes the parked positions.
+    public void ParkActivityOrder(int finalCount)
+    {
+        EnsureActive();
+        var offset = Math.Max(_activities.Count, finalCount) + 1;
+        foreach (var activity in _activities) activity.SetOrder(offset + activity.Order);
     }
 
     private void EnsureActive()
@@ -80,9 +160,29 @@ public sealed class Lesson
     {
         EnsureActive();
         var activity = new Activity(Id, title, instructions, content, _activities.Count, estimatedDuration);
+        var total = TotalOf(_activities.Select(x => x.EstimatedDuration).Append(activity.EstimatedDuration));
         _activities.Add(activity);
+        EstimatedDuration = total;
         UpdatedAt = DateTimeOffset.UtcNow;
         return activity;
+    }
+
+    // The persisted total is always derived from the activities: 0 when there are none, their sum
+    // when every one has a duration, and null while any legacy activity still lacks one.
+    private void RecalculateDuration() => EstimatedDuration = TotalOf(_activities.Select(x => x.EstimatedDuration));
+
+    private static int? TotalOf(IEnumerable<int?> durations)
+    {
+        var total = 0;
+        var any = false;
+        foreach (var duration in durations)
+        {
+            any = true;
+            if (duration is not { } minutes) return null;
+            // Checked arithmetic: an overflow is reported instead of silently wrapping around.
+            total = checked(total + minutes);
+        }
+        return any ? total : 0;
     }
 }
 
@@ -97,4 +197,9 @@ internal static class Rules
 
     public static int? Duration(int? value) => value is <= 0
         ? throw new ArgumentOutOfRangeException(nameof(value), "Duration must be positive minutes.") : value;
+
+    // Editor writes always carry a duration, unlike legacy rows where null is preserved.
+    public static int RequiredDuration(int value) => value <= 0
+        ? throw new ArgumentOutOfRangeException(nameof(value), "Duration must be a positive whole number of minutes.")
+        : value;
 }

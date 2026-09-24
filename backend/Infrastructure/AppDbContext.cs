@@ -30,7 +30,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         {
             entity.ToTable("Lessons", table =>
             {
-                table.HasCheckConstraint("CK_Lesson_Duration", "\"EstimatedDuration\" IS NULL OR \"EstimatedDuration\" > 0");
+                table.HasCheckConstraint("CK_Lesson_Duration", "\"EstimatedDuration\" IS NULL OR \"EstimatedDuration\" >= 0");
                 table.HasCheckConstraint("CK_Lesson_Level", "\"Level\" IN ('A2','B1','B2')");
             });
             entity.HasKey(x => x.Id);

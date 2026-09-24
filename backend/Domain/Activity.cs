@@ -8,6 +8,22 @@ public abstract record ActivityContent
 {
     public abstract ActivityType Type { get; }
     public abstract void Validate();
+
+    // The declared type is the authoritative discriminator: the concrete record is chosen from it,
+    // so a redundant `type` left inside legacy JSON can never contradict the stored column.
+    public static ActivityContent Read(ActivityType type, JsonElement content)
+    {
+        ActivityContent? value = type switch
+        {
+            ActivityType.Speaking => content.Deserialize<SpeakingContent>(ContentJson.Options),
+            ActivityType.Reading => content.Deserialize<ReadingContent>(ContentJson.Options),
+            ActivityType.Writing => content.Deserialize<WritingContent>(ContentJson.Options),
+            ActivityType.VocabularyGrammar => content.Deserialize<VocabularyGrammarContent>(ContentJson.Options),
+            _ => throw new ArgumentOutOfRangeException(nameof(type), "Unsupported activity type.")
+        };
+        return value ?? throw new JsonException("The content does not match the declared activity type.");
+    }
+
     protected static void Questions(IReadOnlyList<string>? questions)
     {
         if (questions is null || questions.Count is < 1 or > 50)
@@ -62,6 +78,39 @@ public sealed class Activity
     public int Order { get; private set; }
     public int? EstimatedDuration { get; private set; }
 
+    // Editor write path: the activity keeps its identity (Id, LessonId, Order) and only its
+    // editable data changes. Everything is validated before anything is assigned, so a rejected
+    // update never leaves the activity half-modified. The declared type is the content's own
+    // type, so an incompatible type/content pair cannot be stored.
+    public void Update(string title, string instructions, ActivityContent content, int estimatedDuration)
+    {
+        var (validTitle, validInstructions, validDuration) =
+            ValidateEditableData(title, instructions, content, estimatedDuration);
+        Type = content.Type;
+        Content = JsonSerializer.Serialize(content, content.GetType(), ContentJson.Options);
+        Title = validTitle;
+        Instructions = validInstructions;
+        EstimatedDuration = validDuration;
+    }
+
+    // Validation without mutation, so a caller applying a whole set can reject the request before
+    // changing any activity.
+    internal static (string Title, string Instructions, int Duration) ValidateEditableData(
+        string title, string instructions, ActivityContent content, int estimatedDuration)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        content.Validate();
+        return (Rules.Text(title, 200, nameof(title)),
+            Rules.Text(instructions, 2000, nameof(instructions)),
+            Rules.RequiredDuration(estimatedDuration));
+    }
+
+    internal void SetOrder(int order)
+    {
+        if (order < 0) throw new ArgumentOutOfRangeException(nameof(order), "Order cannot be negative.");
+        Order = order;
+    }
+
     // Copy the stored JSON verbatim; do not reinterpret or normalize legacy content.
     internal Activity CopyTo(Guid lessonId) => new()
     {
@@ -75,14 +124,11 @@ public sealed class Activity
         EstimatedDuration = EstimatedDuration
     };
 
-    public ActivityContent ReadContent() => Type switch
+    public ActivityContent ReadContent()
     {
-        ActivityType.Speaking => JsonSerializer.Deserialize<SpeakingContent>(Content, ContentJson.Options)!,
-        ActivityType.Reading => JsonSerializer.Deserialize<ReadingContent>(Content, ContentJson.Options)!,
-        ActivityType.Writing => JsonSerializer.Deserialize<WritingContent>(Content, ContentJson.Options)!,
-        ActivityType.VocabularyGrammar => JsonSerializer.Deserialize<VocabularyGrammarContent>(Content, ContentJson.Options)!,
-        _ => throw new InvalidOperationException("Unsupported activity type.")
-    };
+        using var document = JsonDocument.Parse(Content);
+        return ActivityContent.Read(Type, document.RootElement);
+    }
 }
 
 internal static class ContentJson

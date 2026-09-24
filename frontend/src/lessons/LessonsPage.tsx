@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getCurrentUser, logout, type User } from '../auth';
 import { transitionLesson, duplicateLesson, lessonDetailKey, lessonListKey, listLessons, type LessonFilters, type LessonLevel } from './lesson-api';
+import { formatLessonDuration } from './lesson-duration';
 
 export default function LessonsPage({ user, trash = false }: { user: User; trash?: boolean }) {
   const [search, setSearch] = useState('');
@@ -81,7 +82,8 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
         {lessons.data.length === 0
           ? <p>{trash ? 'La papelera está vacía.' : filtered ? 'No hay clases que coincidan con estos filtros.' : 'Aún no tienes clases.'}</p>
           : <ul className="lesson-list">{lessons.data.map((lesson) =>
-            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p><div className="lesson-actions">{!trash && <><Link to={"/lessons/" + lesson.id + "/edit"}>Editar {lesson.title}</Link>
+            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p>{!trash && <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>}<div className="lesson-actions">{!trash && <><Link className="button" to={"/lessons/" + lesson.id + "/play"}>Iniciar clase</Link>
+              <Link to={"/lessons/" + lesson.id + "/edit"}>Editar {lesson.title}</Link>
               <button className="secondary duplicate-button" type="button" disabled={busy}
                 aria-label={'Duplicar ' + lesson.title} onClick={() => duplicate.mutate(lesson.id)}>
                 {duplicate.isPending && duplicate.variables === lesson.id ? 'Duplicando…' : 'Duplicar'}
