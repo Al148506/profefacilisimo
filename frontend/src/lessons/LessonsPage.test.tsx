@@ -76,6 +76,25 @@ it('retries errors only when requested', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Reintentar clases' }));
   expect(await screen.findByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
 });
+it('offers the player on every active lesson, pointing at its own id', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson, { ...lesson, id: 'l2', title: 'Segunda' }]);
+  page();
+  const links = await screen.findAllByRole('link', { name: 'Iniciar clase' });
+  expect(links).toHaveLength(2);
+  expect(links[0]).toHaveAttribute('href', '/lessons/l1/play');
+  expect(links[1]).toHaveAttribute('href', '/lessons/l2/play');
+});
+it('never offers the player from the trash', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson]);
+  page(true);
+  await screen.findByRole('heading', { name: 'Viajes' });
+  expect(screen.queryByRole('link', { name: 'Iniciar clase' })).not.toBeInTheDocument();
+});
+it('offers the player even when the lesson has no activities yet', async () => {
+  vi.mocked(listLessons).mockResolvedValue([{ ...lesson, estimatedDuration: 0 }]);
+  page();
+  expect(await screen.findByRole('link', { name: 'Iniciar clase' })).toHaveAttribute('href', '/lessons/l1/play');
+});
 it('keys cache by user, state and effective filters', () => {
   expect(lessonListKey('u1', { search: ' viaje ', level: 'B1' })).toEqual(['lessons', 'u1', 'active', 'viaje', 'B1']);
   expect(lessonListKey('u1', { search: '', level: '' })).not.toEqual(lessonListKey('u2', { search: '', level: '' }));
