@@ -28,6 +28,31 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
   `Application.dll` e `Infrastructure.dll` a `backend/Api/bin`. Son fallos de copia, no de
   compilación: comprobar con `dotnet build backend/Infrastructure/Infrastructure.csproj --no-restore`.
 
+## Trabajo paralelo multiagente (worktrees)
+
+- **Un worktree nuevo NO compila tal cual.** `.gitignore` excluye `**/obj/`, `**/bin/`,
+  `**/node_modules/`, `.tools/` y `**/test-results/`, así que un `git worktree add` nace sin
+  artefactos de compilación, sin `node_modules` y sin la configuración local.
+- Bootstrap obligatorio de cada worktree, antes de dárselo a un agente:
+  1. Artefactos .NET: intentar `dotnet restore`; si falla (es lo esperado en este entorno), copiar
+     `obj/` desde el checkout principal para `backend/{Domain,Application,Infrastructure,Api}` y
+     `tests/{Domain.Tests,Integration.Tests}`, y **verificar** con
+     `dotnet build backend/Infrastructure/Infrastructure.csproj --no-restore` **dentro** del worktree.
+     `project.assets.json` guarda un `projectPath` absoluto: el fallback suele funcionar porque la
+     carpeta de paquetes NuGet es compartida, pero no está garantizado.
+  2. `.tools/local-settings.json` → copiar. Lo necesitan los tests de integración y `dotnet ef`.
+  3. `frontend/node_modules` → `npm ci` dentro del worktree, o copiar la carpeta existente.
+- **Aislamiento**: los worktrees aíslan el sistema de ficheros, no la sesión del agente. Los
+  subagentes de una misma sesión comparten `cwd` y checkout, así que el paralelismo real exige
+  **una sesión por worktree** (o ejecutar los carriles en secuencia sobre ramas).
+- **Recursos de escritor único**: la carpeta `backend/Infrastructure/Migrations/` y
+  `AppDbContextModelSnapshot.cs` no admiten dos escritores — el snapshot se regenera entero y el
+  conflicto no se puede resolver a mano.
+- **Playwright y puertos**: `playwright test` arranca Vite por su cuenta (`webServer`) y la API de
+  pruebas usa el 5080. Dos agentes ejecutando E2E a la vez chocan: serializar el E2E.
+- Limpieza: `git worktree remove <ruta>` + `git worktree prune`. Nunca `rm -rf` sobre un worktree
+  (deja metadatos huérfanos en `.git/worktrees`).
+
 ## Convenciones del repo
 
 - .NET 9 (`global.json` → SDK 9.0.318), cuatro capas: Domain / Application / Infrastructure / Api.
