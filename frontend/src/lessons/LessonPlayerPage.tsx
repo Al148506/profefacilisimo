@@ -5,6 +5,7 @@ import { useAuth } from '../auth';
 import ActivityView from './ActivityView';
 import { getLesson, lessonDetailKey, type LessonDetails } from './lesson-api';
 import { formatLessonDuration } from './lesson-duration';
+import { ACTIVITY_TYPE_LABELS } from './lesson-schema';
 import { canonicalPosition, CLOSING_VALUE, POSITION_PARAM, positionParam, readPlayerPosition } from './player-position';
 
 /**
@@ -140,14 +141,24 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
   const current = activities[position.index];
   return <section className="card lesson-player" data-testid="lesson-player" ref={containerRef}>
     <header className="lesson-player-header">
-      <span className="level-badge">{lesson.level}</span>
-      <h1>{lesson.title}</h1>
-      <p className="lesson-player-progress" data-testid="player-progress">Actividad {position.index + 1} de {count}</p>
-      <h2 data-testid="player-activity-title">{current.title}</h2>
-      <p data-testid="player-activity-duration">{activityDuration(current.estimatedDuration)}</p>
+      <div className="lesson-player-heading">
+        <span className="level-badge">{lesson.level}</span>
+        <h1>{lesson.title}</h1>
+        {/* The activity is the heading of the body below, not part of the lesson's title, so it sits
+            here as the one line of metadata that qualifies what is on screen right now. */}
+        <p className="lesson-player-meta">
+          <span data-testid="player-progress">Actividad {position.index + 1} de {count}</span>
+          <span className="lesson-player-meta-separator" aria-hidden="true">·</span>
+          <span data-testid="player-activity-title">{current.title}</span>
+          <span className="lesson-player-meta-separator" aria-hidden="true">·</span>
+          <span data-testid="player-activity-type">{ACTIVITY_TYPE_LABELS[current.type]}</span>
+          <span className="lesson-player-meta-separator" aria-hidden="true">·</span>
+          <span data-testid="player-activity-duration">{activityDuration(current.estimatedDuration)}</span>
+        </p>
+      </div>
       <div className="lesson-player-tools">
         {fullscreenSupported && <button type="button" className="secondary" data-testid="player-fullscreen"
-          aria-pressed={fullscreen} onClick={toggleFullscreen}>Pantalla completa</button>}
+          aria-pressed={fullscreen} onClick={toggleFullscreen}>{fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}</button>}
         <Link data-testid="player-edit" to={'/lessons/' + lesson.id + '/edit'}>Editar</Link>
       </div>
     </header>

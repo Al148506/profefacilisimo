@@ -130,7 +130,38 @@ it('shows lesson title, level, counter, activity title and duration in the heade
   expect(screen.getByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
   expect(screen.getByText('B1')).toBeInTheDocument();
   expect(screen.getByTestId('player-progress')).toHaveTextContent('Actividad 2 de 3');
+  expect(screen.getByTestId('player-activity-title')).toHaveTextContent('Segunda');
   expect(screen.getByTestId('player-activity-duration')).toHaveTextContent('Sin duración');
+});
+
+it('names the type of the activity on screen, not another one', async () => {
+  page();
+  expect(await screen.findByTestId('player-activity-type')).toHaveTextContent('Speaking');
+  await userEvent.click(screen.getByTestId('player-next'));
+  expect(screen.getByTestId('player-activity-type')).toHaveTextContent('Writing');
+  await userEvent.click(screen.getByTestId('player-next'));
+  expect(screen.getByTestId('player-activity-type')).toHaveTextContent('Reading');
+});
+
+it('reads the progress, the activity, its type and its duration as one line of metadata', async () => {
+  page('/lessons/l1/play?actividad=2');
+  const meta = (await screen.findByTestId('player-progress')).closest('.lesson-player-meta');
+  expect(meta).not.toBeNull();
+  // The four fields share the one line, in that order: it is the hierarchy the header promises.
+  expect(within(meta as HTMLElement).getByTestId('player-activity-title')).toBeInTheDocument();
+  expect(within(meta as HTMLElement).getByTestId('player-activity-type')).toBeInTheDocument();
+  expect(within(meta as HTMLElement).getByTestId('player-activity-duration')).toBeInTheDocument();
+  // The three separators are what make it read as a list, and they are decoration, never announced.
+  const separators = (meta as HTMLElement).querySelectorAll('.lesson-player-meta-separator');
+  expect(separators).toHaveLength(3);
+  for (const separator of separators) expect(separator).toHaveAttribute('aria-hidden', 'true');
+});
+
+it('keeps the activity out of the document headings, so the class title is the only h1', async () => {
+  page();
+  await screen.findByTestId('player-activity-title');
+  expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
 });
 
 it('shows a real duration in minutes, and a zero duration as 0 min', async () => {
@@ -295,15 +326,19 @@ it('enters and leaves fullscreen on the player container, following the real sta
   await screen.findByTestId('player-activity-title');
   const button = screen.getByTestId('player-fullscreen');
   expect(button).toHaveAttribute('aria-pressed', 'false');
+  expect(button).toHaveTextContent('Pantalla completa');
   await userEvent.click(button);
   expect(request).toHaveBeenCalledTimes(1);
   expect(document.fullscreenElement).toBe(screen.getByTestId('lesson-player'));
   expect(button).toHaveAttribute('aria-pressed', 'true');
+  // The label follows the state: it says how to leave the mode the player is actually in.
+  expect(button).toHaveTextContent('Salir de pantalla completa');
   // The mode never costs the position: the same activity is still on screen.
   expect(screen.getByTestId('player-activity-title')).toHaveTextContent('Primera');
   await userEvent.click(button);
   expect(exit).toHaveBeenCalledTimes(1);
   expect(button).toHaveAttribute('aria-pressed', 'false');
+  expect(button).toHaveTextContent('Pantalla completa');
   expect(screen.getByTestId('player-activity-title')).toHaveTextContent('Primera');
 });
 
@@ -314,9 +349,12 @@ it('follows a fullscreen exit it did not trigger, as when Esc leaves the mode', 
   const button = screen.getByTestId('player-fullscreen');
   await userEvent.click(button);
   expect(button).toHaveAttribute('aria-pressed', 'true');
+  expect(button).toHaveTextContent('Salir de pantalla completa');
   Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null });
   fireEvent(document, new Event('fullscreenchange'));
   expect(button).toHaveAttribute('aria-pressed', 'false');
+  // A state change the button did not cause still updates its label, exactly as Esc requires.
+  expect(button).toHaveTextContent('Pantalla completa');
 });
 
 it('offers no fullscreen button when the browser does not expose the API', async () => {

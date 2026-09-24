@@ -102,12 +102,18 @@ button.danger { background: #8c3033; border-color: #8c3033; }
    which keeps it disjoint from the editor's `activity-*` rules above. Reading is the whole job here:
    the sizes are set so an activity is legible from a metre away. */
 .lesson-player { width: min(100%, 880px); }
-.lesson-player-header { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-bottom: 18px; border-bottom: 1px solid #dfe5d8; }
-.lesson-player-header h1 { margin: 4px 0 0; }
-.lesson-player-header h2 { font-family: Manrope, system-ui, sans-serif; font-size: clamp(20px, 3vw, 26px); letter-spacing: -.03em; margin: 10px 0 0; }
-.lesson-player-header p { margin: 0; }
-.lesson-player-progress { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #607448; }
-.lesson-player-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
+/* Two areas: the block that names the class on the left and the actions on the right.
+   The `margin` reset is load-bearing: the global `header` rule above sets `margin: auto` for the site
+   masthead, and this element is also a `<header>`. Without the reset the block is centred and floats
+   away from the left edge instead of starting there. */
+.lesson-player-header { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px 28px; margin: 0; max-width: none; padding-bottom: 18px; border-bottom: 1px solid #dfe5d8; }
+/* The badge leads the title but must not compete with it, so the title stays at `h1` size. */
+.lesson-player-heading { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.lesson-player-heading h1 { margin: 0; overflow-wrap: anywhere; }
+/* Progress, activity, type and duration are one line of secondary metadata, not headings. */
+.lesson-player-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 14px; font-weight: 600; color: #3c5a4e; }
+.lesson-player-meta-separator { color: #97b54d; }
+.lesson-player-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-left: auto; }
 .lesson-player-tools button { padding: 10px 14px; font-size: 14px; }
 .lesson-player-tools a { font-size: 14px; }
 
@@ -130,10 +136,18 @@ button.danger { background: #8c3033; border-color: #8c3033; }
 .player-activity-list { font-size: 18px; line-height: 1.75; color: #173b37; margin: 0; padding-left: 26px; display: grid; gap: 10px; }
 .player-activity-list li { padding-left: 4px; }
 
+/* The card is padded generously, which reads as centred on a big screen. Fullscreen removes that
+   margin so the header starts at the left edge, and the vertical fit is relaxed: the cards are
+   centred with `place-items`, and a taller card would otherwise be cropped by the viewport. */
+.lesson-player:fullscreen { display: flex; flex-direction: column; width: 100%; max-width: none; height: 100%; padding: 24px 32px; border: 0; border-radius: 0; overflow-y: auto; box-shadow: none; }
+.lesson-player:fullscreen .lesson-player-body { flex: 1 1 auto; max-height: none; }
+
 @media (max-width: 600px) {
   .lesson-player-body { max-height: none; overflow-y: visible; }
   .lesson-player-controls { flex-direction: column; align-items: stretch; }
   .lesson-player-controls .secondary { margin-left: 0; }
-  .lesson-player-tools { width: 100%; }
+  .lesson-player-header { flex-direction: column; gap: 12px; }
+  .lesson-player-heading { flex-basis: auto; }
+  .lesson-player-tools { width: 100%; margin-left: 0; }
   .player-activity-instructions, .player-activity-text, .player-activity-prompt, .player-activity-explanation, .player-activity-list { font-size: 16px; }
 }
