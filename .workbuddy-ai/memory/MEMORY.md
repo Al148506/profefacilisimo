@@ -41,7 +41,11 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
      `project.assets.json` guarda un `projectPath` absoluto: el fallback suele funcionar porque la
      carpeta de paquetes NuGet es compartida, pero no está garantizado.
   2. `.tools/local-settings.json` → copiar. Lo necesitan los tests de integración y `dotnet ef`.
-  3. `frontend/node_modules` → `npm ci` dentro del worktree, o copiar la carpeta existente.
+  3. `frontend/node_modules` → `cp -r` desde el checkout principal (verificado: 186 MB / 11 213
+     ficheros, unos minutos, sin red; el recuento final coincide). `npm ci` es la alternativa.
+- **`git worktree add` es seguro con el checkout principal ocupado** por otra sesión: no toca su árbol
+  de trabajo. Antes de trabajar, comprobar en qué rama está el checkout principal: si está en una rama
+  de flujo con ficheros sin commitear, hay que ir a un worktree, no tocar el checkout.
 - **Aislamiento**: los worktrees aíslan el sistema de ficheros, no la sesión del agente. Los
   subagentes de una misma sesión comparten `cwd` y checkout, así que el paralelismo real exige
   **una sesión por worktree** (o ejecutar los carriles en secuencia sobre ramas).
@@ -72,6 +76,12 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
 - Las specs viven en `specs/` con estado en la cabecera (`**Estado:**`). `specs/.spec-config.yml`
   tiene `AutoCreateBranch: true`.
 - Las specs aprobadas se implementan con el skill `spec-impl`, en rama `spec-NN-slug`.
+- **Specs paralelas** (las `*-parallel.md` que genera `multi-ag-spec`): `spec-impl` derivaría la rama del
+  nombre del fichero (`spec-03-reproductor-de-clases-parallel`), pero §5 del plan nombra sus propias
+  ramas. **Manda el plan**: rama de integración `spec-NN-slug` desde `main`, y una rama
+  `spec-NN-slug--<flujo>` por flujo. Sin worktree si hay una sola sesión — el propio §1 del plan lo
+  autoriza (ejecutar los flujos en secuencia sobre ramas). El estado de la spec paralela es
+  independiente del de la original: aprobar una no aprueba la otra.
 
 ## SPEC 02 (editor de actividades MVP) — cerrada y validada
 
@@ -120,3 +130,23 @@ cd frontend && npx playwright test --reporter=list
 - **`tsconfig.json` del frontend solo incluye `src`**: `e2e/` queda fuera de `tsc -b`.
 - **El entorno crea commits automáticamente.** Durante una sesión aparecieron commits que el agente
   no hizo; no asumir que el árbol limpio significa que no se ha commiteado nada.
+
+## Tests de componente: jsdom no implementa el scroll
+
+`jsdom` define `Element.prototype.scrollTop` (accesorio) pero **no** `Element.prototype.scrollTo` ni
+`scrollIntoView`; `window.scrollTo` sí existe. Usar `elemento.scrollTop = 0` en el código de
+producción (funciona en navegador y en el test) y verificar el reinicio con un accesorio propio sobre
+el elemento (`Object.defineProperty(el, 'scrollTop', { set })`), que es determinista.
+
+## SPEC 03 — estado de las ramas
+
+`spec-03-reproductor-de-clases` es la rama de **integración**; cada flujo tiene la suya
+(`--activity-view`, `--player`, `--entry-styles`, `--docs`, `--contract`) y se fusionan en ese orden.
+El plan completo está en `specs/03-reproductor-de-clases-parallel.md`.
+
+- **Flujo B y Flujo A hechos**; B fusionado en integración (commit `e1954f4`).
+- **`D:/Freelance/pf-wt-contract` tiene un stub de `ActivityView.tsx` sin commitear** en
+  `frontend/src/lessons/ActivityView.tsx` (1118 bytes). Si se commitea y fusiona dará «both added»
+  contra la implementación del Flujo B: gana B.
+- **`ActivityView.tsx` y `styles.css` son recursos de escritor único** del plan (B y C): el Flujo A
+  solo los lee.
