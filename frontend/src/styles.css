@@ -59,8 +59,28 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid #c5d1
 button.danger { background: #8c3033; border-color: #8c3033; }
 @media (max-width: 600px) { .lesson-actions { align-items: stretch; flex-direction: column; } }
 
+/* The wizard: one group of fields at a time, so the editor never shows both forms at once. */
+/* Explicit, because `legend` is not a `label` and the reset rule of `fieldset` sets `border: 0`. */
+.lesson-editor fieldset legend { font-family: Manrope, system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; margin-bottom: 6px; }
+.editor-step-hint { font-size: 13px; margin: 0 0 18px; }
+.editor-steps { border-bottom: 1px solid #dfe5d8; padding-bottom: 16px; }
+.editor-steps-count { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #607448; margin: 0 0 10px; }
+.editor-steps-list { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; margin: 0; }
+.editor-step { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #62736b; }
+.editor-step-number { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid #c5d1c5; background: #f7f8f2; color: #62736b; font-size: 13px; font-weight: 700; }
+/* Arrow between steps, drawn with a pseudo-element so it is never read out. */
+.editor-step + .editor-step::before { content: '→'; color: #b6c0b4; margin-right: 8px; }
+.editor-step.is-current { color: #173b37; }
+.editor-step.is-current .editor-step-number { background: #234e41; border-color: #234e41; color: #e5efb3; }
+.editor-step.is-current .editor-step-label { border-bottom: 2px solid #97b54d; padding-bottom: 2px; }
+.editor-step.is-done .editor-step-number { background: #eef4d9; border-color: #97b54d; color: #286354; }
+.editor-step-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: #286354; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.editor-step-link:hover { background: none; color: #173b37; }
+.editor-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+.editor-actions > button { flex: 1 1 160px; }
+.editor-step-hint { max-width: 46ch; }
 /* Higher specificity than `.lesson-editor fieldset`, which resets border and padding. */
-.lesson-editor fieldset.activity-section { display: block; border-top: 1px solid #dfe5d8; margin-top: 28px; padding-top: 18px; }
+.lesson-editor fieldset.activity-section { display: block; }
 .activity-section legend { font-family: Manrope, system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
 .activity-total { font-weight: 600; color: #3c5a4e; margin: 12px 0 18px; }
 .activity-add { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
@@ -96,6 +116,10 @@ button.danger { background: #8c3033; border-color: #8c3033; }
   .activity-add > div, .activity-select { flex-basis: auto; }
   .activity-order, .activity-remove { width: 100%; }
   .activity-order button { flex: 1 1 0; }
+  /* The two wizard actions stack, keeping the main one last so it stays the closest to the thumb. */
+  .editor-actions { flex-direction: column-reverse; align-items: stretch; }
+  .editor-steps-list { gap: 6px; }
+  .editor-step { font-size: 13px; }
 }
 
 /* Player. Every class is frozen by the contract (C3) and prefixed `lesson-player-`/`player-activity-`,

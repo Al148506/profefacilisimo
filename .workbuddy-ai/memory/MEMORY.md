@@ -2,22 +2,30 @@
 
 Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md`.
 
-## Entorno de build (importante)
+## Entorno de build
 
-- **`dotnet restore` no funciona desde la shell bash**: NuGet falla con
-  `error: Value cannot be null. (Parameter 'path1')`; `dotnet --info` lanza `TypeInitializationException`
-  en `Microsoft.DotNet.Installer.Windows.InstallerBase`. El entorno restringe APIs de Windows
-  (carpetas conocidas / registro). No es un problema del repo.
-- **Solución**: usar siempre `--no-restore` (los `obj/project.assets.json` ya están presentes).
-  No añadir `PackageReference` nuevas: sin restore no se resolverían.
+- **`dotnet restore` no funciona desde bash** (`Value cannot be null. (Parameter 'path1')`;
+  `dotnet --info` lanza `TypeInitializationException`). El entorno restringe las API de Windows.
+  **Usar siempre `--no-restore`** (los `obj/project.assets.json` ya existen). No añadir
+  `PackageReference` nuevas: sin restore no se resolverían. No es un problema del repo.
 - **El tool de PowerShell no devuelve stdout.** Redirigir a fichero y leerlo con la herramienta de lectura.
 - `cmd.exe` está bloqueado desde bash por política de seguridad.
-- **Bloqueo de ficheros**: si hay una API en ejecución o Visual Studio abierto, `backend/Api` falla con
-  `MSB3021/MSB3027` al copiar `Domain.dll`/`Application.dll`/`Infrastructure.dll` a `backend/Api/bin`.
-  Son fallos de copia, no de compilación: verificar con
+- **Bloqueo de ficheros**: con una API en ejecución o Visual Studio abierto, `backend/Api` falla con
+  `MSB3021/MSB3027` al copiar las DLLs. Son fallos de copia, no de compilación: verificar con
   `dotnet build backend/Infrastructure/Infrastructure.csproj --no-restore`.
-- **El entorno crea commits automáticamente.** No asumir que un árbol limpio significa que no se ha
-  commiteado nada.
+- **`netstat`/`taskkill` con PID no son fiables**: el PID no siempre es el dueño. Para parar la API:
+  `Get-Process Api | Stop-Process -Force`.
+- **El entorno crea commits automáticamente.** Un árbol limpio no significa que no se haya commiteado nada.
+
+## Convenciones del repo
+
+- .NET 9 (`global.json` → SDK 9.0.318), cuatro capas: Domain / Application / Infrastructure / Api.
+- `Directory.Build.props` activa `TreatWarningsAsErrors`, `Nullable` e `ImplicitUsings` globalmente.
+- Frontend: React + TypeScript + Vite, TanStack Query, React Hook Form, Zod. El `tsconfig.json` solo
+  incluye `src`, así que `e2e/` queda fuera de `tsc -b` (hueco conocido).
+- Nomenclatura CSS: kebab-case con prefijo por área (`lesson-*`, `activity-*`, `player-activity-*`).
+- Scripts de verificación (PowerShell, requieren el entorno del usuario): `scripts/Test.ps1`,
+  `scripts/Test-E2E.ps1`.
 
 ## Tests
 
@@ -29,68 +37,58 @@ Notas de proyecto con valor duradero. Los detalles diarios van en `YYYY-MM-DD.md
   ```
 - **`IClassFixture` crea una base `pf_test_*` por CLASE de test, no por test.** Dos tests que insertan
   filas en la misma clase se contaminan entre sí (rompen los `CountAsync`): ponerlos en clases distintas.
-- **EF Core**: añadir hijos nuevos a un padre **ya existente** (`Unchanged`) los marca `Modified` en vez
-  de `Added` (claves Guid `ValueGeneratedOnAdd` ya puestas) → `UPDATE` en vez de `INSERT` →
+- **EF Core — hijos nuevos en un padre existente**: si el padre está `Unchanged` y la clave Guid del hijo
+  ya viene puesta (`ValueGeneratedOnAdd`), EF los marca `Modified` → `UPDATE` en vez de `INSERT` →
   `DbUpdateConcurrencyException` (0 filas). Añadirlos explícitamente (`db.Activities.AddRange(...)`) o
-  dentro de un padre también nuevo.
-- **jsdom no implementa el scroll**: define `Element.prototype.scrollTop` (accesorio) pero **no**
-  `scrollTo` ni `scrollIntoView`. Usar `elemento.scrollTop = 0` en producción y verificar con un
-  accesorio propio (`Object.defineProperty(el, 'scrollTop', { set })`).
+  dentro de un padre también nuevo. `LessonService.UpdateAsync` debe marcar `Added` las creadas por
+  `Lesson.ApplyActivities`.
+- **jsdom no implementa el scroll**: `Element.prototype.scrollTop` (accesorio) sí, pero **no** `scrollTo`
+  ni `scrollIntoView` (`window.scrollTo` sí existe). Usar `elemento.scrollTop = 0` en producción y
+  verificar con un accesorio propio (`Object.defineProperty(el, 'scrollTop', { set })`).
+- **`toHaveTextContent` normaliza el espacio en blanco**: no ve el `gap` de flex, así que `'A · B'` falla
+  contra `'A·B'`. Afirmar los separadores como elementos, no como texto.
+- **Playwright, locators**: `getByLabel('Pregunta 1')` también casa con `aria-label="Quitar pregunta 1"`
+  → usar `{ exact: true }`. `getByText` en strict mode puede casar dos nodos si el total coincide con una
+  duración de actividad → anclar al nodo correcto (`getByText('Duración total:')`, `.activity-duration`).
+- Los specs E2E escriben capturas en `.tools/` (ignorado por git): convención del repo.
+- Si la ejecución falla deja artefactos en `frontend/test-results/`: borrarlos en un turno aparte (el
+  sandbox bloquea borrados masivos >50 ficheros en el mismo turno). Playwright lo vacía solo al terminar bien.
 
-## Trabajo paralelo multiagente (worktrees)
+## TRAMPA: selectores de ELEMENTO en `styles.css`
 
-- **Un worktree nuevo NO compila tal cual.** `.gitignore` excluye `**/obj/`, `**/bin/`,
-  `**/node_modules/`, `.tools/` y `**/test-results/`. Bootstrap antes de dárselo a un agente:
-  1. Artefactos .NET: intentar `dotnet restore`; si falla (lo esperado), copiar `obj/` desde el checkout
-     principal para `backend/{Domain,Application,Infrastructure,Api}` y
-     `tests/{Domain.Tests,Integration.Tests}`, y **verificar** con
-     `dotnet build backend/Infrastructure/Infrastructure.csproj --no-restore` **dentro** del worktree.
-     `project.assets.json` guarda un `projectPath` absoluto; el fallback suele funcionar (carpeta NuGet
-     compartida) pero no está garantizado.
-  2. `.tools/local-settings.json` → copiar. Lo necesitan los tests de integración y `dotnet ef`.
-  3. `frontend/node_modules` → `cp -r` desde el checkout principal (verificado: 186 MB / 11 213
-     ficheros, unos minutos, sin red, el recuento final coincide). `npm ci` es la alternativa.
-- **`git worktree add` es seguro con el checkout principal ocupado** por otra sesión: no toca su árbol de
-  trabajo. Antes de trabajar, comprobar en qué rama está el checkout principal: si está en una rama de
-  flujo con ficheros sin commitear, hay que ir a un worktree, no tocar el checkout.
-- **Aislamiento**: los worktrees aíslan el sistema de ficheros, no la sesión del agente. Los subagentes de
-  una misma sesión comparten `cwd` y checkout, así que el paralelismo real exige **una sesión por
-  worktree** (o ejecutar los carriles en secuencia sobre ramas).
-- **Recursos de escritor único** (specs con backend): `backend/Infrastructure/Migrations/` y
-  `AppDbContextModelSnapshot.cs` no admiten dos escritores — el snapshot se regenera entero y el conflicto
-  no se puede resolver a mano.
-- **Playwright y puertos**: `playwright test` arranca Vite por su cuenta (`webServer`) y la API de pruebas
-  usa el 5080. Dos agentes ejecutando E2E a la vez chocan: serializar el E2E.
-- Limpieza: `git worktree remove <ruta>` + `git worktree prune`. Nunca `rm -rf` sobre un worktree (deja
-  metadatos huérfanos en `.git/worktrees`).
+`styles.css` (~línea 5) define `header { max-width: 1200px; margin: auto; padding: 28px 32px; ... }` para
+el masthead de `App.tsx`. El reproductor usa `<header className="lesson-player-header">`, que **también es
+un `<header>`** → heredaba `margin: auto` y se centraba (medido: `marginLeft: 502px`).
 
-## Convenciones del repo
-
-- .NET 9 (`global.json` → SDK 9.0.318), cuatro capas: Domain / Application / Infrastructure / Api.
-- `Directory.Build.props` activa `TreatWarningsAsErrors`, `Nullable` e `ImplicitUsings` globalmente.
-- Frontend: React + TypeScript + Vite, TanStack Query, React Hook Form, Zod. El `tsconfig.json` solo
-  incluye `src`, así que `e2e/` queda fuera de `tsc -b`.
-- Scripts de verificación (PowerShell, requieren el entorno del usuario): `scripts/Test.ps1`,
-  `scripts/Test-E2E.ps1`.
+**Regla**: antes de estilar `header`, `footer`, `main`, `h1`, `p`, `a`, `button` o `small`, comprobar si
+hay una regla de elemento aplicable. Las clases no protegen de los selectores de elemento. Arreglo:
+`margin: 0; max-width: none`. Se encontró **midiendo en navegador real** con Playwright +
+`getComputedStyle`/`getBoundingClientRect()`, no razonando sobre el CSS (tres hipótesis previas fueron falsas).
 
 ## Flujo de especificaciones
 
 - Las specs viven en `specs/` con estado en la cabecera (`**Estado:**`). `specs/.spec-config.yml` tiene
-  `AutoCreateBranch: true`. Las specs aprobadas se implementan con el skill `spec-impl`, en rama
-  `spec-NN-slug`.
-- **Specs paralelas** (las `*-parallel.md` que genera `multi-ag-spec`): `spec-impl` derivaría la rama del
-  nombre del fichero (`spec-03-reproductor-de-clases-parallel`), pero §5 del plan nombra sus propias
-  ramas. **Manda el plan**: rama de integración `spec-NN-slug` desde `main`, y una rama
-  `spec-NN-slug--<flujo>` por flujo. Sin worktree si hay una sola sesión — el propio §1 del plan lo
-  autoriza (ejecutar los flujos en secuencia sobre ramas). El estado de la spec paralela es independiente
-  del de la original: aprobar una no aprueba la otra.
+  `AutoCreateBranch: true`. Las specs aprobadas se implementan con el skill `spec-impl`, en rama `spec-NN-slug`.
+- **Specs paralelas** (`*-parallel.md`, generadas por `multi-ag-spec`): `spec-impl` derivaría la rama del
+  nombre del fichero (`spec-03-...-parallel`), pero **manda §5 del plan**: rama de integración `spec-NN-slug`
+  desde `main`, y una rama `spec-NN-slug--<flujo>` por flujo. Sin worktree con una sola sesión (§1 del plan
+  lo autoriza: ejecutar los flujos en secuencia sobre ramas). El estado de la spec paralela es independiente
+  del de la original.
+- **Skill `/spec`**: mandaba leer `template.md` «en la misma carpeta que este skill»; no existía y se creó
+  en `~/.workbuddy-ai/skills/spec/template.md` con la estructura de spec de este repo.
 
-## SPEC 02 (editor de actividades MVP) — cerrada y validada 2026-09-23
+## Trabajo paralelo multiagente (worktrees) — resumen
 
-Diez etapas implementadas y los 30 criterios de aceptación (§11) validados. Baseline:
-`dotnet build Profefacilisimo.slnx --no-restore` 0 errores / 0 advertencias, `Domain.Tests` 55/55 ✓,
-`Integration.Tests` 101/101 ✓, frontend 57/57 ✓, `tsc -b` y `eslint .` limpios, **E2E 4/4 ✓**
-(`lesson-builder`, `lessons` ×2, `session`).
+- **Un worktree nuevo NO compila tal cual**: `.gitignore` excluye `obj/`, `bin/`, `node_modules/`, `.tools/`
+  y `test-results/`. Bootstrap: copiar `obj/` de cada proyecto .NET desde el checkout principal y verificar
+  con `dotnet build backend/Infrastructure/Infrastructure.csproj --no-restore` **dentro** del worktree;
+  copiar `.tools/local-settings.json`; `cp -r frontend/node_modules` (186 MB / 11 213 ficheros, sin red).
+- `git worktree add` es seguro con el checkout principal ocupado. Limpieza: `git worktree remove` +
+  `git worktree prune` (nunca `rm -rf`).
+- **Los worktrees aíslan el sistema de ficheros, no la sesión**: dos subagentes de una misma sesión
+  comparten `cwd` y checkout. El paralelismo real exige **una sesión por worktree**.
+- **Escritor único**: `backend/Infrastructure/Migrations/` y `AppDbContextModelSnapshot.cs` no admiten dos
+  escritores. Dos agentes ejecutando Playwright chocan de puerto (E2E serializado).
 
 ## Verificar el frontend con un navegador real (receta)
 
@@ -101,68 +99,105 @@ ConnectionStrings__Default='Host=localhost;Port=5432;Database="pf_e2e";Username=
 Jwt__SigningKey='<SigningKey de .tools/local-settings.json>' ASPNETCORE_ENVIRONMENT=Development \
   ~/.dotnet/tools/dotnet-ef database update --project backend/Infrastructure --startup-project backend/Api --no-build
 
-# 2. API dedicada en el puerto que usa el proxy de Vite por defecto (5080)
+# 2. API dedicada en el puerto del proxy de Vite (5080). ARRANCARLA ANTES que Playwright, o el proxy da
+#    ECONNREFUSED y /api/auth/register un 500 falso.
 dotnet run --project backend/Api --no-build --no-launch-profile --urls http://localhost:5080   # background
 
 # 3. Runner de Playwright (arranca Vite él mismo vía webServer de playwright.config.ts)
 cd frontend && npx playwright test --reporter=list
 ```
 
-- Al terminar: parar la API y `dropdb --if-exists --force -U "$POSTGRES_USER" pf_e2e`.
-- Playwright: `getByLabel('Pregunta 1')` también casa con el `aria-label` «Quitar pregunta 1` →
-  usar `{ exact: true }`.
-- `getByText` en strict mode puede casar dos nodos si el total coincide con una duración de actividad:
-  anclar al nodo correcto (`getByText('Duración total:')`, `.activity-duration`).
-- Los specs E2E escriben capturas en `.tools/` (ignorado por git): convención del repo.
-- **`tsconfig.json` del frontend solo incluye `src`**: `e2e/` queda fuera de `tsc -b`.
-- Si la ejecución falla deja muchos artefactos en `frontend/test-results/`: borrarlos en un turno aparte
-  (el sandbox bloquea borrados masivos >50 ficheros en el mismo turno). Playwright lo vacía solo cuando la
-  ejecución termina bien.
-- **El entorno crea commits automáticamente.** Durante una sesión aparecieron commits que el agente no
-  hizo; no asumir que el árbol limpio significa que no se ha commiteado nada.
+- Al terminar: `Get-Process Api | Stop-Process -Force` y
+  `dropdb --if-exists --force -U "$POSTGRES_USER" pf_e2e`.
+- **Si el sandbox bloquea la limpieza de `frontend/test-results`, `playwright test` falla**: alternativa es
+  un script suelto en `frontend/` con `import { chromium } from '@playwright/test'` y `node script.mjs`.
+  Evitar crear temporales dentro del repo (umbral de borrado masivo: 50 ficheros).
+- CORS: 201 con `Origin` + `X-Requested-With`; 403 sin ellas (`"Origen de solicitud no permitido."`).
+- **`netstat`/`taskkill` con PID no son fiables**: para parar la API de pruebas, matar por nombre.
 
-## Tests de componente: jsdom no implementa el scroll
+## Estado de las specs
 
-`jsdom` define `Element.prototype.scrollTop` (accesorio) pero **no** `Element.prototype.scrollTo` ni
-`scrollIntoView`; `window.scrollTo` sí existe. Usar `elemento.scrollTop = 0` en el código de producción
-(funciona en navegador y en el test) y verificar el reinicio con un accesorio propio sobre el elemento
-(`Object.defineProperty(el, 'scrollTop', { set })`), que es determinista.
+- **SPEC 01** (gestión de clases): implementada y aprobada. `last write wins` (sin `Lesson.Version` ni ETag).
+- **SPEC 02** (editor de actividades MVP): **cerrada y validada 2026-09-23**, en `main`. 10 etapas y los
+  30 criterios de §11 verificados. Baseline: build 0/0, `Domain.Tests` 55/55, `Integration.Tests` 101/101,
+  frontend 57/57, `tsc -b` y `eslint .` limpios, **E2E 4/4**. Informe: `docs/spec-02-validation-report.md`.
+- **SPEC 03** (reproductor de clases): implementada y en `main` (PR #2, `fd69352`). **No toca el backend**:
+  es solo lectura sobre el contrato de SPEC 01 + 02.
+  - Flujos fusionados: `--contract`, `--activity-view` (B), `--player` (A), `--entry-styles` (C).
+  - Ruta `/lessons/:id/play` en `App.tsx`; entrada «Iniciar clase» en `LessonsPage.tsx`.
+  - **Pendiente**: Flujo D (docs), E2E del reproductor (`e2e/lesson-player.spec.ts`) y criterio de 390 px (I4).
 
-## SPEC 03 — estado de las ramas
+### Decisiones de SPEC 02 (no reabrir sin motivo)
 
-`spec-03-reproductor-de-clases` es la rama de **integración**; cada flujo tiene la suya
-(`--contract`, `--activity-view`, `--player`, `--entry-styles`, `--docs`) y se fusionan en ese orden. El
-plan completo está en `specs/03-reproductor-de-clases-parallel.md`.
+- El constructor de `Lesson` **no** acepta duración: el total siempre se calcula (0 sin actividades, suma
+  si están completas, `null` si falta alguna). `ApplyActivities` valida todo el conjunto antes de mutar.
+- `Activity.Update` **no** refresca el total del agregado; lo hace `Lesson.ApplyActivities`.
+- Metadatos en RHF, actividades en `useState`. `draftFingerprint` excluye `key` (regenerar claves tras
+  guardar no es un cambio del profesor). Los errores se re-validan al editar.
+- Duración fraccionaria: `int` de extremo a extremo. El contenido específico se valida pero **no** se recorta.
+- `CK_Lesson_Duration` admite `0` desde `AddCalculatedLessonDuration`; `CK_Activity_Duration` sigue siendo
+  `IS NULL OR > 0`, así que un `0` por actividad no puede existir en la base.
 
-- **`contract` y `activity-view` (B) fusionados** en integración (commit `e1954f4`).
-- **Flujo A (`--player`) implementado** — `LessonPlayerPage.tsx` (191 líneas), `player-position.ts` (51)
-  y sus dos suites (405 líneas). **Sí registra la ruta** `/lessons/:id/play` en `App.tsx`.
-- **Flujo C (`--entry-styles`) implementado**: «Iniciar clase» en el listado + 40 líneas nuevas de
-  estilos del reproductor. `tsc`, `eslint`, frontend 70/70 ✓. Queda el criterio de 390 px para I4.
-- **`D:/Freelance/pf-wt-contract` tiene un stub de `ActivityView.tsx` sin commitear** (1118 bytes). Si se
-  commitea y fusiona dará «both added» contra la implementación del Flujo B: **gana B**.
-- **`ActivityView.tsx` y `styles.css` son recursos de escritor único** del plan (B y C respectivamente);
-  A solo los lee.
+### Decisiones de SPEC 03 (no reabrir sin motivo)
+
+- **La posición no vive en estado**: se lee de `?actividad` en cada render (recarga, Atrás y URL a mano
+  pasan por el mismo camino). Base 1; `?actividad=fin` es la pantalla de cierre.
+- Un parámetro **presente pero inválido** se reemplaza por la forma canónica (`abc` → `1`, `03` → `3`); uno
+  **ausente** no se toca. Normalizar usa `replace`.
+- Los listeners de teclado se registran solo con una actividad en pantalla (inertes en cierre/vacío/error).
+- El cierre es un bloque propio, no la cabecera (Editar vive en la cabecera).
 - **Clases del reproductor = listas de C3 de la spec**, no del marcado: 15 son clases CSS y
-  `player-activity-title` / `player-activity-duration` son `data-testid` de E2E (no se estilizan).
-  `player-instructions` es `data-testid`; la clase de las instrucciones es `player-activity-instructions`.
-- **C3 y C5 viven en la fila «C3 · Frontera DOM/CSS» de la tabla de la spec** (línea ~88), no en un
-  apartado `## 3`: buscar por el nombre de la clase, no por el número de sección.
+  `player-activity-title` / `player-activity-duration` son `data-testid` de E2E sin `className` (el CSS les
+  apunta como descendientes de `.lesson-player-header`). La clase de las instrucciones es
+  `player-activity-instructions` (`player-instructions` es el `data-testid`).
+- Cabecera en fila: `.lesson-player-heading` (badge → `h1` → metadatos) + `.lesson-player-tools`
+  (`margin-left: auto`). El título de actividad **no** es un `<h2>`: es metadato secundario en
+  `.lesson-player-meta`. `.lesson-player-body { max-height: 60vh; overflow-y: auto }` es el scroll interno
+  que el Flujo A verifica: no convertirlo en contenedor flex.
+- El tipo de actividad sale de `ACTIVITY_TYPE_LABELS` (`lesson-schema.ts`); no hay mapa nuevo.
 
-## El bug «Iniciar clase → Página no encontrada» (2026-09-24)
+### Lección de integración (specs paralelas)
 
-**Síntoma**: pulsar «Iniciar clase» llevaba a `/lessons/:id/play` y respondía «Página no encontrada»
-(el comodín `path="*"` de `App.tsx`).
+Mientras los flujos vivan en ramas separadas, **un enlace puede existir sin su ruta**: el Flujo C añadió
+«Iniciar clase» y el Flujo A registró la `<Route>`, pero la rama de A no estaba fusionada → «Página no
+encontrada» en `/lessons/:id/play`. Tests verdes por separado no lo detectan (cada suite prueba su mitad).
+Es el «Riesgo I2» del plan. Humo rápido: `curl -s http://localhost:5173/src/App.tsx | grep play`.
 
-**Causa**: **el Flujo A no estaba fusionado**. El enlace lo añadió el Flujo C, pero la `<Route>` la
-registra quien la sirve, y esa rama (`--player`) estaba sin fusionar. El checkout principal corría en
-`--entry-styles`, cuyo `App.tsx` aún no conocía la ruta. La implementación existía y estaba probada: era
-un fallo de **integración**, no de código.
+### Nota para correcciones de diseño (CSS)
 
-**Descartadas**: la ruta no estaba mal escrita, el componente no estaba montado en otro sitio y Vite no
-tenía nada que recargar (reiniciarlo no habría arreglado nada: el módulo no existía en el árbol).
+`.card` fija `width: min(100%, 470px)`; `.lesson-player` tuvo que sobrescribirlo. Los bloques de estilos del
+reproductor viven al final de `styles.css`. Los flujos de SPEC 03 ya están fusionados, así que `styles.css`
+vuelve a tener un único escritor y sustituir reglas del reproductor es trabajo de integración legítimo.
 
-**Lección (aplicable a toda spec paralela)**: mientras los flujos vivan en ramas separadas, un enlace
-puede existir sin su ruta. Los tests de componente verdes por separado **no** lo detectan — cada suite
-prueba su mitad. Es exactamente el «Riesgo I2» de §6 del plan: hay que comprobarlo en navegador real.
-Para reproducirlo rápido: `curl -s http://localhost:5173/src/App.tsx | grep play`.
+## Lote de correcciones de diseño (rama `design-fixes`) — reglas del usuario
+
+Cada corrección se entrega en **su propia rama hija de `design-fixes`**, no acumulada en ella.
+
+**Reglas vigentes para todo este lote** (pedidas expresamente el 2026-09-25):
+
+- **No crear ni actualizar tests unitarios ni E2E.**
+- **No ejecutar la suite completa** de pruebas.
+- **No hacer validaciones manuales automatizadas en navegador** (Playwright, sondas).
+- **Verificar solo compilación y errores de TypeScript.** Para el frontend: `npx tsc -b` y
+  `npx vite build` (el segundo es el que demuestra que el proyecto compila de verdad).
+- Si un test existente falla por el cambio de interfaz, **documentarlo sin modificarlo**.
+- Priorizar velocidad de iteración sobre cobertura.
+
+Consecuencia práctica: los tests del editor (`LessonEditorPage.test.tsx`) y los E2E
+(`lessons.spec.ts`, `lesson-builder.spec.ts`) quedan **desincronizados a propósito** de la interfaz.
+Sus causas raíz están en `docs/wizard-2-pasos-affected-tests.md`.
+
+### Cambio 1 — «Crear clase» en wizard de 2 pasos
+
+Rama `feat/crear-clase-wizard-2-pasos`. Nuevos `editor-steps.ts` y `StepIndicator.tsx`; modificados
+`LessonEditorPage.tsx` y `styles.css`. Decisiones clave:
+
+- El **paso vive en `useState`**; una recarga vuelve al paso 1. No va en la URL.
+- **`carriedStep`** (variable de módulo) sobrevive al remount que provoca crear una clase: guardar una
+  nueva navega a `/lessons/:id/edit`, que monta un editor distinto. Sin eso el profesor vuelve al paso 1
+  justo después de guardar. Se consume al montar y se resetea en un `useEffect`.
+- `legend` necesita regla explícita de tamaño: al sacarlo de `.activity-section` perdió el estilo.
+- El contrato de guardado **no cambia**: una sola petición en el paso 2 y validación del conjunto.
+
+
+
