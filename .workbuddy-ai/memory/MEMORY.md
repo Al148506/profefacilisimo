@@ -114,19 +114,9 @@ cd frontend && npx playwright test --reporter=list
 - `getByText` en strict mode puede casar dos nodos si el total coincide con una duración de actividad:
   anclar al nodo correcto (`getByText('Duración total:')`, `.activity-duration`).
 - Los specs E2E escriben capturas en `.tools/` (ignorado por git): convención del repo.
-- **`tsconfig.json` del frontend solo incluye `src`**: `e2e/` queda fuera de `tsc -b`.
 - Si la ejecución falla deja muchos artefactos en `frontend/test-results/`: borrarlos en un turno aparte
   (el sandbox bloquea borrados masivos >50 ficheros en el mismo turno). Playwright lo vacía solo cuando la
   ejecución termina bien.
-- **El entorno crea commits automáticamente.** Durante una sesión aparecieron commits que el agente no
-  hizo; no asumir que el árbol limpio significa que no se ha commiteado nada.
-
-## Tests de componente: jsdom no implementa el scroll
-
-`jsdom` define `Element.prototype.scrollTop` (accesorio) pero **no** `Element.prototype.scrollTo` ni
-`scrollIntoView`; `window.scrollTo` sí existe. Usar `elemento.scrollTop = 0` en el código de producción
-(funciona en navegador y en el test) y verificar el reinicio con un accesorio propio sobre el elemento
-(`Object.defineProperty(el, 'scrollTop', { set })`), que es determinista.
 
 ## SPEC 03 — estado de las ramas
 
@@ -166,3 +156,65 @@ tenía nada que recargar (reiniciarlo no habría arreglado nada: el módulo no e
 puede existir sin su ruta. Los tests de componente verdes por separado **no** lo detectan — cada suite
 prueba su mitad. Es exactamente el «Riesgo I2» de §6 del plan: hay que comprobarlo en navegador real.
 Para reproducirlo rápido: `curl -s http://localhost:5173/src/App.tsx | grep play`.
+
+## Lote de correcciones de diseño (rama `design-fixes`) — reglas del usuario
+
+Cada corrección se entrega en **su propia rama hija de `design-fixes`**, no acumulada en ella.
+
+**Reglas vigentes para todo este lote** (pedidas el 2026-09-25):
+
+- **No crear ni actualizar tests unitarios ni E2E.**
+- **No ejecutar la suite completa** de pruebas.
+- **No hacer validaciones manuales automatizadas en navegador** (Playwright, sondas).
+- **Verificar solo compilación y errores de TypeScript**: `npx tsc -b`, `npx vite build`,
+  `npx eslint .`. El build es el que demuestra que el proyecto compila de verdad.
+- Si un test existente falla por el cambio de interfaz, **documentarlo sin modificarlo**.
+- Priorizar velocidad de iteración sobre cobertura.
+
+Consecuencia: los tests del editor y los E2E quedan **desincronizados a propósito** de la interfaz.
+Causas raíz en `docs/wizard-2-pasos-affected-tests.md` y `docs/sweetalert2-affected-tests.md`.
+
+### Cambio 1 — «Crear clase» en wizard de 2 pasos
+
+Rama `feat/crear-clase-wizard-2-pasos`. Nuevos `editor-steps.ts` y `StepIndicator.tsx`; modificados
+`LessonEditorPage.tsx` y `styles.css`. Decisiones clave:
+
+- El **paso vive en `useState`**; una recarga vuelve al paso 1. No va en la URL.
+- **`carriedStep`** (variable de módulo) sobrevive al remount que provoca crear una clase: guardar una
+  nueva navega a `/lessons/:id/edit`, que monta un editor distinto. Sin eso el profesor vuelve al paso 1
+  justo después de guardar. Se consume al montar y se resetea en un `useEffect`.
+- El avance de paso se bloquea con `form.trigger()`; `onSubmit` revalida y, si falla, fuerza el paso 1.
+- `legend` necesita regla explícita: al sacarlo de `.activity-section` perdió el estilo.
+- El contrato de guardado **no cambia**: una sola petición en el paso 2, validación del conjunto.
+
+### Cambio 2 — Notificación SweetAlert2 al guardar
+
+Misma rama. `frontend/src/notifications.ts` (**nuevo**) concentra todas las alertas; el editor solo
+llama a `notifyLessonSaved()` / `notifyLessonSaveFailed(message)` desde los callbacks de la mutación.
+
+- **`sweetalert2` no estaba en el proyecto**. Instalado.
+- El tema va en `styles.css` (`.pf-alert`), no en `customClass` de JS: colores junto a las variables que
+  imitan. En JS solo `confirmButtonColor`.
+- **Trampa de tipado**: `Parameters<typeof Swal.fire>[0]` resuelve a la sobrecarga de `string` y `tsc`
+  falla con TS2698/TS2345. Importar `SweetAlertOptions` como tipo.
+- **Trampa de `npm install`**: reformatea `package.json` y `package-lock.json` enteros (expande
+  `engines`, borra ~47 líneas de `libc`). Restaurar con `git checkout` + editar el bloque a mano y
+  regenerar con `npm install --package-lock-only`. **Con árbol sucio, revisar siempre el diff del lock:
+  el ruido de formato esconde el cambio real.**
+- **La alerta no se cierra sola**: en los E2E se interpone entre guardado y guardado y puede interceptar
+  clics; `Swal.fire` mueve el foco, lo que puede romper tests que espían `window.confirm` justo después
+  de guardar. Riesgo abierto en `docs/sweetalert2-affected-tests.md`.
+
+### Cambio 3 — Botón secundario «Editar clase» en la lista
+
+Rama `feat/boton-editar-clase`. Solo `LessonsPage.tsx` y `styles.css`. El enlace de texto
+`Editar {titulo}` pasa a botón secundario; el orden ya era el correcto
+(`[Iniciar clase] [Editar clase] [Duplicar] [Enviar a papelera]`).
+
+- **No existía el patrón «enlace secundario»**: `button.secondary` es selector de **elemento**, así que
+  un `<Link className="button secondary">` salía relleno. Se generalizó a
+  `button.secondary, .button.secondary`. Primera aparición: si surgen más enlaces secundarios, este es
+  el patrón establecido. (Ejemplo de la trampa de selectores de elemento documentada arriba.)
+- Etiqueta visible `Editar clase`; el título va en `aria-label` (contexto accesible). El E2E
+  `lessons.spec.ts:79` sigue válido porque el `aria-label` resuelve a «Editar Clase editada».
+  `LessonsPage.test.tsx` no afirma nada sobre ese enlace → **ningún test se rompe**.
