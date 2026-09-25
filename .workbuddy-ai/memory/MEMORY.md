@@ -199,5 +199,24 @@ Rama `feat/crear-clase-wizard-2-pasos`. Nuevos `editor-steps.ts` y `StepIndicato
 - `legend` necesita regla explícita de tamaño: al sacarlo de `.activity-section` perdió el estilo.
 - El contrato de guardado **no cambia**: una sola petición en el paso 2 y validación del conjunto.
 
+### Cambio 2 — Notificación SweetAlert2 al guardar
+
+Misma rama. `frontend/src/notifications.ts` (**nuevo**) concentra todas las alertas; el editor solo
+llama a `notifyLessonSaved()` / `notifyLessonSaveFailed(message)` desde los callbacks de la mutación.
+
+- **`sweetalert2` no estaba en el proyecto** (solo React, TanStack Query, RHF, Zod). Instalado.
+- **El tema va en `styles.css` (`.pf-alert`)**, no en `customClass` de JS, para tener los colores junto
+  a las variables que imitan. En JS solo `confirmButtonColor`.
+- **Trampa de tipado**: `Parameters<typeof Swal.fire>[0]` resuelve a la sobrecarga de `string` y `tsc`
+  falla con TS2698/TS2345. Hay que importar `SweetAlertOptions` como tipo.
+- **Trampa de `npm install`**: reformatea `package.json` y `package-lock.json` enteros (expande
+  `engines`, borra ~47 líneas de `libc` de los paquetes opcionales). Restaurar con `git checkout` +
+  editar el bloque a mano, y regenerar el lock con `npm install --package-lock-only`.
+  **Con árbol sucio, revisar siempre el diff del lock: el ruido de formato esconde el cambio real.**
+- **La alerta no se cierra sola**: en los E2E se interpone entre guardado y guardado y puede
+  interceptar clics; y `Swal.fire` mueve el foco, lo que puede romper tests que espían `window.confirm`
+  justo después de guardar. Documentado como riesgo abierto en `docs/sweetalert2-affected-tests.md`.
+
+
 
 

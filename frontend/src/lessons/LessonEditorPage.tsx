@@ -8,6 +8,7 @@ import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
 import StepIndicator from './StepIndicator';
 import { STEP_LABELS, type EditorStep } from './editor-steps';
+import { notifyLessonSaveFailed, notifyLessonSaved } from '../notifications';
 import {
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, activityDraftSchema, activityIssueIndex, createDraft, draftFingerprint,
   draftFromSaved, lessonDraftSchema, lessonSchema, toActivityInput,
@@ -113,10 +114,15 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       client.setQueryData(lessonDetailKey(userId, saved.id), saved);
       void client.invalidateQueries({ queryKey: ['lessons', userId] });
       if (!initial) { carriedStep = step; navigate('/lessons/' + saved.id + '/edit', { replace: true }); }
+      // The alert is a complement: it fires after the server confirmed and the state is already
+      // settled, so it cannot interfere with the save or with the navigation above.
+      void notifyLessonSaved();
     },
     onError: (error) => {
       // The draft is kept exactly as it is: a failed save never discards the teacher's work.
       if (error instanceof LessonSaveError) setErrors(serverErrors(error.fields, activities));
+      // The API message wins when there is one; a network failure has none and falls back.
+      void notifyLessonSaveFailed(error.message);
     },
   });
 
