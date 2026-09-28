@@ -1,13 +1,16 @@
-# Spanish Lesson Builder
+# Profefacilisimo — workspace para profesores de español
 
-Aplicación web orientada a facilitar la preparación y ejecución de
-clases de español como lengua extranjera. El objetivo del MVP es
-permitir que un profesor cree, organice y utilice una clase estructurada
-sin tener que preparar cada actividad desde cero.
+Aplicación web orientada a facilitar la preparación, organización y
+ejecución de clases de español como lengua extranjera. El profesor puede
+crear y estructurar una clase sin preparar cada actividad desde cero,
+impartirla con el Lesson Player y, en la siguiente fase, organizar su
+trabajo en función de sus estudiantes.
 
-> **Estado:** Fase 1 implementada / MVP\
-> **Objetivo inicial:** validar si un creador de clases estructuradas
-> reduce el tiempo de preparación para profesores de español.
+> **Estado:** Fases 1–3 implementadas (base, Class Builder, Lesson Player).\
+> **Próxima fase:** Fase 4 — Student Management (documentación conceptual en
+> [SPEC 04](docs/student-management.md); sin implementar todavía).\
+> **Objetivo inicial:** validar si un creador de clases estructuradas reduce
+> el tiempo de preparación para profesores de español.
 
 ------------------------------------------------------------------------
 
@@ -31,13 +34,21 @@ El proyecto busca centralizar este proceso en una sola aplicación.
 
 La promesa principal del producto es:
 
-> **Crear rápidamente una clase de español estructurada y lista para
-> utilizar.**
+> **Facilitar a los profesores de español la preparación, organización y
+> ejecución de sus clases, permitiendo personalizarlas y gestionarlas en
+> función de cada estudiante.**
 
 El profesor podrá seleccionar las características de la clase, organizar
-actividades, editar su contenido, guardar la lección y posteriormente
-utilizarla mediante una interfaz sencilla durante la sesión con el
-estudiante.
+actividades, editar su contenido, guardar la lección y utilizarla mediante
+una interfaz sencilla durante la sesión con el estudiante. De forma
+progresiva, podrá además reutilizar la misma clase con varios estudiantes y
+mantener una ficha básica de cada uno.
+
+La propuesta de valor **evoluciona** desde el foco inicial («crear
+rápidamente una clase de español estructurada y lista para utilizar») hacia
+la organización del trabajo del profesor alrededor de sus estudiantes. El
+producto no deja de ser un creador de clases: amplía el modelo conceptual
+para que la preparación pueda tener en cuenta a quién va dirigida.
 
 ------------------------------------------------------------------------
 
@@ -59,7 +70,8 @@ Ejemplos:
 ### Futuro
 
 -   Academias de idiomas.
--   Profesores con múltiples estudiantes.
+-   Profesores con múltiples estudiantes (organizados por estudiante desde
+    la Fase 4).
 -   Creadores de material educativo.
 -   Estudiantes que quieran practicar independientemente.
 
@@ -67,9 +79,10 @@ Ejemplos:
 
 ## 4. Alcance del MVP
 
-El MVP se centrará en dos funcionalidades principales:
+El MVP se centra en tres funcionalidades principales, ya implementadas, y
+se amplía con una cuarta en la siguiente fase.
 
-### Class Builder
+### Class Builder (Fase 2 — implementada)
 
 Permite crear y editar una clase.
 
@@ -82,12 +95,12 @@ Información básica:
 -   Objetivo de la clase.
 -   Actividades.
 
-### Lesson Player
+### Lesson Player (Fase 3 — implementada)
 
 Permite utilizar la clase mediante una interfaz limpia durante una
 sesión.
 
-El profesor podrá avanzar entre actividades utilizando un flujo similar
+El profesor puede avanzar entre actividades utilizando un flujo similar
 a:
 
 ``` text
@@ -103,6 +116,13 @@ Writing
    ↓
 Cierre
 ```
+
+### Student Management (Fase 4 — próxima, sin implementar)
+
+Permite mantener información básica de cada estudiante y asociar clases
+existentes con él, sin convertirse en un sistema de gestión educativa. El
+alcance y el modelo conceptual están definidos en
+[SPEC 04 — Student Management](docs/student-management.md).
 
 ------------------------------------------------------------------------
 
@@ -138,6 +158,8 @@ interactivos.
 
 ## 6. Flujo principal
 
+### 6.1 Flujo implementado (Fases 1–3)
+
 ``` text
 Profesor
    ↓
@@ -157,6 +179,23 @@ Iniciar Lesson Player
    ↓
 Utilizar la clase con el estudiante
 ```
+
+### 6.2 Ampliación prevista (Fase 4 — no implementada)
+
+``` text
+Profesor
+   ↓
+Students
+   ↓
+Ficha del estudiante (nivel, idioma, objetivos, intereses, notas)
+   ↓
+Asignar clases existentes
+   ↓
+Ver las clases asignadas desde el perfil
+```
+
+La misma clase puede asignarse a varios estudiantes. Ver
+[SPEC 04](docs/student-management.md).
 
 ------------------------------------------------------------------------
 
@@ -178,7 +217,7 @@ una personalización visual compleja.
 
 ### Backend
 
--   .NET 10
+-   .NET 9
 -   ASP.NET Core Web API
 -   Entity Framework Core
 -   FluentValidation (opcional)
@@ -262,9 +301,11 @@ Responsable de:
 
 ------------------------------------------------------------------------
 
-## 9. Modelo de dominio inicial
+## 9. Modelo de dominio
 
-Modelo conceptual simplificado:
+### 9.1 Modelo implementado
+
+Modelo conceptual simplificado tal como existe hoy:
 
 ``` text
 User
@@ -284,7 +325,7 @@ User
 
 Una `Lesson` contiene múltiples `Activities`.
 
-Cada actividad deberá compartir propiedades básicas como:
+Cada actividad comparte propiedades básicas:
 
 -   Id.
 -   LessonId.
@@ -295,40 +336,109 @@ Cada actividad deberá compartir propiedades básicas como:
 -   Order.
 -   EstimatedDuration.
 
-Los campos específicos de cada actividad podrán modelarse posteriormente
-conforme evolucione el MVP.
+### 9.2 Evolución prevista (Fase 4 — no implementada)
+
+La Fase 4 introduce `Student` como entidad en paralelo a `Lesson`, ambas
+colgando del profesor:
+
+``` text
+User
+ ├── Students
+ │
+ └── Lessons
+       └── Activities
+```
+
+`Students` **no** contiene clases y `Lesson` **no** contiene estudiantes: la
+relación entre ambos se resolverá mediante una entidad intermedia (ver
+apartado 9.3).
+
+### 9.3 Decisión de dominio: una `Lesson` no pertenece a un único estudiante
+
+Una clase **no** debe pertenecer necesariamente a un único estudiante: la
+misma clase puede reutilizarse con varios alumnos.
+
+``` text
+Lesson
+"B1 - Pretérito vs Imperfecto"
+       │
+       ├── Student A
+       ├── Student B
+       └── Student C
+```
+
+Por esta razón **se evita diseñar conceptualmente `StudentId` dentro de
+`Lesson`** como si una clase solo pudiera pertenecer a un alumno. Un campo
+así en `Lesson` haría imposible reutilizar la clase y obligaría a duplicarla
+por cada estudiante.
+
+La relación se representa, cuando se implemente, con una entidad intermedia:
+
+``` text
+Student
+   ↕
+LessonAssignment
+   ↕
+Lesson
+```
+
+`LessonAssignment` sería una relación N:M con `Id`, `StudentId`, `LessonId`,
+`AssignedAt` y `Status`. **No se implementa todavía**, salvo que sea
+estrictamente necesario para la SPEC de Student Management. Su diseño
+completo está en [SPEC 04](docs/student-management.md).
 
 ------------------------------------------------------------------------
 
-## 10. Entidades iniciales
+## 10. Entidades
 
-### User
+### Implementadas
+
+#### User
 
 Representa al profesor que utiliza la plataforma.
 
-### Lesson
+#### Lesson
 
 Representa una clase completa.
 
-### Activity
+#### Activity
 
 Representa una actividad perteneciente a una clase.
 
-Inicialmente se evitará crear entidades adicionales como Student,
-Course, Classroom o Institution hasta comprobar que son necesarias.
+### Previstas (Fase 4 — no implementadas)
+
+#### Student
+
+Representa a un alumno del profesor. Propuesta inicial de campos: `Id`,
+`Name`, `Email`, `Level`, `NativeLanguage`, `Interests`, `Goals`, `Notes`,
+`CreatedAt`, `UpdatedAt`. Son una propuesta que podrá ajustarse durante la
+implementación de la SPEC; el sistema almacena únicamente información
+relevante para preparar clases (sin teléfono, dirección, datos financieros
+ni médicos). Detalle en [SPEC 04](docs/student-management.md).
+
+#### LessonAssignment
+
+Entidad intermedia para la relación N:M entre `Student` y `Lesson` (apartado
+9.3). Sólo se implementará si es necesario para la asignación de clases.
+
+Se evita crear entidades adicionales como `Course`, `Classroom` o
+`Institution` hasta comprobar que son necesarias.
 
 ------------------------------------------------------------------------
 
-## 11. Funcionalidades principales del MVP
+## 11. Funcionalidades principales
 
-### Autenticación
+Las secciones marcadas como implementadas ya existen en el código; las
+marcadas como próximas están documentadas pero no implementadas.
+
+### Autenticación — implementada
 
 -   Registro.
 -   Inicio de sesión.
 -   Cierre de sesión.
 -   Protección de clases por usuario.
 
-### Gestión de clases
+### Gestión de clases — implementada (Fase 2 / SPEC 01)
 
 -   Crear clase.
 -   Consultar clases.
@@ -340,7 +450,7 @@ Course, Classroom o Institution hasta comprobar que son necesarias.
 -   Definir objetivo.
 -   Definir duración estimada.
 
-### Gestión de actividades
+### Gestión de actividades — implementada (Fase 2 / SPEC 02)
 
 -   Agregar actividades.
 -   Editar actividades.
@@ -349,13 +459,25 @@ Course, Classroom o Institution hasta comprobar que son necesarias.
 -   Seleccionar tipo de actividad.
 -   Agregar instrucciones y contenido.
 
-### Lesson Player
+### Lesson Player — implementado (Fase 3 / SPEC 03)
 
 -   Abrir una clase.
 -   Mostrar una actividad a la vez.
 -   Avanzar a la siguiente actividad.
 -   Regresar a la actividad anterior.
 -   Mostrar progreso dentro de la clase.
+
+### Gestión de estudiantes — próxima (Fase 4 / SPEC 04)
+
+Base mínima para personalizar y organizar el trabajo del profesor, sin
+convertirse en un sistema completo de gestión educativa:
+
+-   Crear, consultar, editar y eliminar estudiantes.
+-   Perfil del estudiante.
+-   Nivel, idioma nativo, objetivos, intereses y notas del profesor.
+-   Asignar clases existentes a estudiantes.
+-   Ver las clases asignadas desde el perfil del estudiante.
+-   Identificar desde una clase qué estudiantes la tienen asignada.
 
 ### Dashboard
 
@@ -389,9 +511,9 @@ Posteriormente podrán incorporarse:
 
 ## 13. Contenido inicial
 
-El MVP no dependerá obligatoriamente de inteligencia artificial.
+El producto no dependerá obligatoriamente de inteligencia artificial.
 
-Se podrán crear plantillas y actividades manualmente para validar
+Se pueden crear plantillas y actividades manualmente para validar
 primero:
 
 1.  Si el flujo de creación resulta útil.
@@ -399,18 +521,23 @@ primero:
 3.  Si los profesores ahorran tiempo.
 4.  Qué tipos de actividades utilizan con mayor frecuencia.
 
+A partir de la Fase 4, la validación incorpora además:
+
+5.  Si resulta útil organizar las clases en función de los estudiantes.
+6.  Si almacenar información relevante de cada estudiante aporta valor al
+    preparar las clases.
+
 Una vez validado el flujo, la IA podrá acelerar la generación del
-contenido.
+contenido, usando la información del estudiante como contexto.
 
 ------------------------------------------------------------------------
 
-## 14. Fuera del alcance del MVP
+## 14. Fuera del alcance
 
-Las siguientes funcionalidades **no forman parte de la primera
-versión**:
+Las siguientes funcionalidades **no forman parte del producto en su estado
+actual ni de la próxima fase**:
 
 -   Generación completa de clases mediante IA.
--   Gestión avanzada de estudiantes.
 -   Cursos completos.
 -   Videollamadas.
 -   Pagos.
@@ -419,13 +546,35 @@ versión**:
 -   Gamificación.
 -   Aplicación móvil.
 -   Analíticas avanzadas.
--   Corrección automática de pronunciación.
 -   Reconocimiento de voz.
+-   Corrección automática de pronunciación.
 -   Sistema avanzado de flashcards.
 -   Integración con calendarios.
 -   Gestión de academias.
+-   Homework.
+-   Progreso avanzado del estudiante.
 
-Esta lista existe para proteger el alcance del MVP.
+Esta lista existe para proteger el alcance del producto.
+
+### Gestión de estudiantes
+
+La gestión de estudiantes se divide en dos niveles. **Ya no se considera
+«fuera del alcance» en bloque**: su versión básica es la próxima fase.
+
+#### Student Management básico — próxima fase (Fase 4 / SPEC 04)
+
+-   Perfil básico (nombre, contacto, nivel, idioma nativo).
+-   Información pedagógica (objetivos, intereses).
+-   Notas del profesor.
+-   Asignación de clases a estudiantes.
+
+#### Student Management avanzado — futuro
+
+-   Progreso del estudiante.
+-   Historial detallado de clases.
+-   Vocabulario.
+-   Homework.
+-   Analíticas.
 
 ------------------------------------------------------------------------
 
@@ -464,22 +613,59 @@ Acciones como:
 ### Gestión de estudiantes
 
 ``` text
-Teacher
- └── Students
-      └── Lessons
-           └── Activities
+User
+ ├── Students
+ │
+ └── Lessons
+      └── Activities
 ```
 
-Posibles funciones:
+La relación entre una clase y un estudiante se resuelve con una entidad
+intermedia, `LessonAssignment`, porque una misma clase puede reutilizarse
+con varios estudiantes (ver apartado 9.3).
+
+La Fase 4 cubre el nivel básico:
 
 -   Perfil del estudiante.
 -   Nivel.
+-   Idioma nativo.
 -   Intereses.
--   Clases anteriores.
--   Notas del profesor.
--   Vocabulario aprendido.
 -   Objetivos.
--   Progreso.
+-   Notas del profesor.
+-   Asignación de clases.
+
+El nivel avanzado (clases anteriores, vocabulario aprendido, progreso)
+pertenece a fases posteriores.
+
+### Sesiones de clase (`LessonSession`)
+
+Una `Lesson` representa el **contenido reutilizable** de una clase; una
+futura `LessonSession` representaría una **instancia concreta** de esa clase
+impartida a un estudiante.
+
+``` text
+Lesson
+ │
+ ├── Session - Student A - Date
+ ├── Session - Student B - Date
+ └── Session - Student A - Date
+```
+
+Ejemplo:
+
+``` text
+Lesson:
+"B1 - Conversación sobre viajes"
+
+Session:
+Carlos
+28/09/2026
+Notas:
+"Necesita practicar el uso del pretérito."
+```
+
+Esta funcionalidad **permanece fuera de la implementación actual** y se
+sitúa en la Fase 5.
 
 ### Personalización con IA
 
@@ -536,9 +722,12 @@ Posibles formatos:
 
 ------------------------------------------------------------------------
 
-## 16. Roadmap preliminar
+## 16. Roadmap
 
-### Fase 1 --- Base
+Estado real del proyecto, sin marcar como implementado nada que no exista
+en el código.
+
+### Fase 1 — Base — COMPLETADA
 
 -   Configuración frontend.
 -   Configuración backend.
@@ -547,7 +736,9 @@ Posibles formatos:
 -   Modelo `Lesson`.
 -   Modelo `Activity`.
 
-### Fase 2 --- Class Builder
+Ver [Fase 1](docs/phase-1.md).
+
+### Fase 2 — Class Builder — COMPLETADA
 
 -   Crear clase.
 -   Editar clase.
@@ -556,48 +747,60 @@ Posibles formatos:
 -   Editar actividades.
 -   Ordenarlas.
 
-### Fase 3 --- Lesson Player
+Ver [SPEC 01](docs/class-management.md) (gestión de clases) y
+[SPEC 02](docs/activity-editor.md) (editor de actividades).
+
+### Fase 3 — Lesson Player — COMPLETADA
 
 -   Mostrar actividades.
 -   Navegación anterior/siguiente.
 -   Indicador de progreso.
 -   Vista optimizada para utilizar durante una clase.
 
-### Fase 4 --- Contenido y validación
+### Fase 4 — Student Management — PRÓXIMA
 
--   Crear clases de ejemplo.
--   Probar el flujo completo.
--   Utilizarlo en escenarios reales.
--   Recoger feedback.
--   Corregir problemas de UX.
+-   CRUD de estudiantes.
+-   Perfil básico y pedagógico.
+-   Asignación de clases existentes a estudiantes.
+-   Ver las clases asignadas desde el perfil y los estudiantes desde la clase.
 
-### Fase 5 --- Primera funcionalidad inteligente
+Ver [SPEC 04](docs/student-management.md). **Sin implementar todavía.**
 
-Después de validar el MVP:
+### Fase 5 — Lesson Sessions — FUTURA
 
--   Generación de una actividad mediante IA.
+-   Registrar cada instancia concreta de una clase impartida.
+-   Fecha, estudiante y notas de la sesión.
 
-En lugar de generar inicialmente una clase completa, se recomienda
-comenzar con algo limitado como:
+### Fase 6 — Content Reuse — FUTURA
 
-> Generar preguntas de conversación para este tema y nivel.
+-   Reutilizar actividades entre clases.
+-   Biblioteca de actividades.
+-   Plantillas.
 
-Esto permitirá evaluar costes, calidad y utilidad antes de ampliar la
-integración.
+### Fase 7 — AI Assisted Creation — FUTURA
+
+-   Generación de actividades y clases mediante IA.
+-   Personalización a partir de la información del estudiante.
+
+Cada fase depende de la validación de la anterior y se desarrolla de forma
+incremental.
 
 ------------------------------------------------------------------------
 
-## 17. Criterios de éxito del MVP
+## 17. Criterios de éxito
 
-El MVP habrá cumplido su objetivo si permite comprobar que:
+El producto habrá cumplido su objetivo si permite comprobar que:
 
 -   Un profesor puede crear una clase sin instrucciones externas.
--   Preparar la clase es más rápido que hacerlo manualmente.
--   La estructura generada/creada resulta útil.
+-   Preparar la clase es más rápido que hacerlo manualmente. *(reducción del
+    tiempo de preparación)*
+-   La estructura generada/creada resulta útil y **las clases se pueden crear
+    y reutilizar con facilidad**.
 -   El profesor puede modificar fácilmente el contenido.
--   El Lesson Player puede utilizarse durante una clase real.
--   Los usuarios desean reutilizar la aplicación para preparar nuevas
-    clases.
+-   El Lesson Player **se puede utilizar durante una clase real**.
+-   **Es posible organizar las clases en función de los estudiantes.**
+-   **Almacenar información relevante de cada estudiante aporta valor**.
+-   Los usuarios desean reutilizar la aplicación para preparar nuevas clases.
 
 El objetivo inicial **no es conseguir una gran cantidad de
 funcionalidades**, sino validar que el flujo principal aporta valor.
@@ -624,13 +827,17 @@ funcionalidades**, sino validar que el flujo principal aporta valor.
 Decisiones que deberán resolverse durante el desarrollo:
 
 -   Nombre definitivo del producto.
--   Librería de componentes UI.
+-   Librería de componentes UI (el proyecto usa por ahora CSS propio).
 -   Proveedor de hosting para la API.
 -   Proveedor de PostgreSQL.
 -   Modelo definitivo para los distintos tipos de actividad.
 -   Estrategia de almacenamiento del contenido de actividades.
 -   Necesidad de drag & drop para ordenar actividades.
 -   Implementación inicial de autenticación.
+-   **Modelo definitivo de `Student` y necesidad real de `LessonAssignment`
+    en la Fase 4** (ver [SPEC 04](docs/student-management.md)).
+-   **Cómo se materializa la asignación de clases: entidad intermedia o
+    relación directa, según lo que exija la SPEC.**
 -   Proveedor de IA para versiones futuras.
 -   Proveedor de Text-to-Speech.
 -   Estrategia de monetización, si el producto se valida.
@@ -640,9 +847,9 @@ Decisiones que deberán resolverse durante el desarrollo:
 ## 20. Visión a largo plazo
 
 La visión del proyecto es evolucionar de un simple creador de lecciones
-a un **workspace para profesores de idiomas**, donde sea posible
-preparar, impartir, reutilizar y personalizar clases desde un mismo
-lugar.
+a un **workspace para profesores de español**, donde sea posible
+preparar, organizar, impartir, reutilizar y personalizar clases desde un
+mismo lugar, teniendo en cuenta a los estudiantes.
 
 La evolución esperada sería:
 
@@ -651,27 +858,63 @@ Class Builder
       ↓
 Lesson Player
       ↓
-AI Assisted Creation
-      ↓
 Student Management
+      ↓
+Lesson Sessions / History
+      ↓
+Content Reuse
+      ↓
+AI Assisted Creation
       ↓
 Homework & Progress
       ↓
 Complete Teaching Workspace
 ```
 
+La **IA se mantiene como una capa posterior**: primero se valida el flujo
+manual completo (crear, impartir, organizar por estudiante y reutilizar) y
+sólo después se añade la generación automática.
+
+La información del estudiante será especialmente relevante para una futura
+generación personalizada. Por ejemplo:
+
+``` text
+Crear una clase B1 para Carlos
+```
+
+podría utilizar:
+
+-   nivel;
+-   idioma nativo;
+-   intereses;
+-   objetivos;
+-   notas del profesor;
+-   historial de clases.
+
+Esto pertenece al futuro y **no debe implementarse ahora**.
+
 El desarrollo deberá realizarse incrementalmente y cada nueva etapa
 dependerá de la validación de la anterior.
 
 
-## Desarrollo local — Fase 1
+## Documentación de las especificaciones
 
-Consulta [la guía de implementación y pruebas](docs/phase-1.md) para arrancar la aplicación y revisar las decisiones técnicas.
+| SPEC | Documento | Estado |
+| --- | --- | --- |
+| Fase 1 | [Base implementada](docs/phase-1.md) | Implementada |
+| SPEC 01 | [Gestión de clases](docs/class-management.md) | Implementada |
+| SPEC 02 | [Editor de actividades](docs/activity-editor.md) | Implementada |
+| SPEC 03 | [Reproductor de clases](specs/03-reproductor-de-clases.md) | Implementada |
+| SPEC 04 | [Student Management](docs/student-management.md) | Documentada — sin implementar |
 
-
-## Gestión de clases — SPEC 01
-Consulta [la guía de gestión de clases](docs/class-management.md) para crear, editar, duplicar, restaurar y eliminar clases, conocer los límites del MVP y ejecutar sus pruebas.
-
-
-## Editor de actividades — SPEC 02
-Consulta [la guía del editor de actividades](docs/activity-editor.md) para agregar, editar, quitar y reordenar actividades, conocer las reglas de duración y contenido, sus decisiones técnicas y las dependencias pendientes del backend.
+-   [Fase 1 — Base](docs/phase-1.md): arranque de la aplicación y decisiones
+    técnicas iniciales.
+-   [SPEC 01 — Gestión de clases](docs/class-management.md): crear, editar,
+    duplicar, restaurar y eliminar clases, límites del MVP y sus pruebas.
+-   [SPEC 02 — Editor de actividades](docs/activity-editor.md): agregar,
+    editar, quitar y reordenar actividades, reglas de duración y contenido.
+-   [SPEC 03 — Reproductor de clases](specs/03-reproductor-de-clases.md):
+    impartición de una clase actividad por actividad.
+-   [SPEC 04 — Student Management](docs/student-management.md): modelo
+    conceptual, entidad `Student`, asignación de clases y reglas de negocio
+    de la próxima fase.
