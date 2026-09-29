@@ -1,5 +1,9 @@
 import LessonEditorPage from './lessons/LessonEditorPage';
 import LessonPlayerPage from './lessons/LessonPlayerPage';
+import StudentsPage from './students/StudentsPage';
+import StudentsTrashPage from './students/StudentsTrashPage';
+import StudentFormPage from './students/StudentFormPage';
+import StudentProfilePage from './students/StudentProfilePage';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -57,6 +61,11 @@ function Dashboard({ trash = false }: { trash?: boolean }) {
   return user ? <LessonsPage key={user.id + (trash ? '-trash' : '-active')} user={user} trash={trash} /> : null;
 }
 
+function StudentsDashboard({ trash = false }: { trash?: boolean }) {
+  const { user } = useAuth();
+  return user ? <StudentsPage key={user.id + (trash ? '-trash' : '-active')} user={user} trash={trash} /> : null;
+}
+
 export default function App() {
   const { loading, error } = useAuth();
   useEffect(() => { void initializeAuth(); }, []);
@@ -64,7 +73,7 @@ export default function App() {
     <main>{loading ? <p role="status">Preparando tu espacio…</p> : error ? <section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><button onClick={() => void retryInitialization()}>Reintentar</button></section> : <Routes>
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" registering />} />
-      <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/trash" element={<Dashboard trash />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /><Route path="/lessons/:id/play" element={<LessonPlayerPage />} /></Route>
+      <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/trash" element={<Dashboard trash />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /><Route path="/lessons/:id/play" element={<LessonPlayerPage />} /><Route path="/students" element={<StudentsDashboard />} /><Route path="/students/trash" element={<StudentsTrashPage />} /><Route path="/students/new" element={<StudentFormPage />} /><Route path="/students/:id" element={<StudentProfilePage />} /><Route path="/students/:id/edit" element={<StudentFormPage />} /></Route>
       <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link to="/">Volver al inicio</Link></section>} />
     </Routes>}</main><footer>Un espacio para enseñar español, a tu manera.</footer></>;
 }

@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
+import AssignedStudents from '../students/AssignedStudents';
 import {
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, activityDraftSchema, activityIssueIndex, createDraft, draftFingerprint,
   draftFromSaved, lessonDraftSchema, lessonSchema, toActivityInput,
@@ -213,6 +214,9 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       {mutation.isSuccess && !dirty && <p role="status">Clase guardada.</p>}
       <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
     </form>
+    {/* Outside the <form> and outside the draft on purpose: assigning a student must never mark the
+        lesson as modified nor require saving first, so the section reads and writes on its own. */}
+    {initial && <AssignedStudents lessonId={initial.id} userId={userId} />}
     <button className="secondary editor-back" disabled={saving} onClick={back}>Volver a Mis clases</button>
   </section>;
 }

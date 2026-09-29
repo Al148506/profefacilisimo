@@ -105,6 +105,125 @@ public class LessonMigrationTests(ApiFixture fixture) : IClassFixture<ApiFixture
         """).ToArrayAsync();
 }
 
+// Its own class, and therefore its own pf_test_* database: the point of this suite is that the student
+// migration is purely additive, so it must not share rows with the other migration suites.
+public class StudentMigrationTests(ApiFixture fixture) : IClassFixture<ApiFixture>
+{
+    [Fact]
+    public async Task StudentMigrationIsAdditiveAndLeavesLessonsActivitiesAndIdentityIntact()
+    {
+        // This fixture owns a fresh pf_test_* database; never downgrade the development database.
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(fixture.ConnectionString).Options);
+        var migrator = db.GetService<IMigrator>();
+        // The state right before the student migration: lessons and activities already exist.
+        await migrator.MigrateAsync("20260923073000_AddCalculatedLessonDuration");
+
+        var owner = Guid.NewGuid();
+        var lesson = Guid.NewGuid();
+        var activity = Guid.NewGuid();
+        var secondActivity = Guid.NewGuid();
+        var timestamp = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
+        var json = """{"prompt":"Texto original áé","legacy":{"flag":true}}""";
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "AspNetUsers" ("Id", "UserName", "EmailConfirmed", "PhoneNumberConfirmed",
+                "TwoFactorEnabled", "LockoutEnabled", "AccessFailedCount")
+            VALUES ({owner}, 'students-migration-owner', false, false, false, false, 0);
+            INSERT INTO "Lessons" ("Id", "UserId", "Title", "Level", "Topic", "Objective",
+                "EstimatedDuration", "CreatedAt", "UpdatedAt", "DeletedAt")
+            VALUES ({lesson}, {owner}, 'Anterior', 'B1', 'Tema', 'Objetivo', 30, {timestamp}, {timestamp}, NULL);
+            INSERT INTO "Activities" ("Id", "LessonId", "Type", "Title", "Instructions", "Content", "Order", "EstimatedDuration")
+            VALUES ({activity}, {lesson}, 'Writing', 'Actividad', 'Instrucciones', CAST({json} AS jsonb), 0, 10),
+                   ({secondActivity}, {lesson}, 'Writing', 'Segunda', 'Instrucciones', CAST({json} AS jsonb), 1, 20);
+            """);
+        var lessonsBefore = await LessonRows(db);
+        var activitiesBefore = await ActivityRows(db);
+        var indexesBefore = await Indexes(db);
+        var usersBefore = await UserRows(db);
+
+        await migrator.MigrateAsync();
+        db.ChangeTracker.Clear();
+
+        // The new tables exist and are empty: there is no inherited data to migrate.
+        Assert.Empty(await db.Students.ToListAsync());
+        Assert.Empty(await db.LessonAssignments.ToListAsync());
+        // Nothing that already existed was rewritten, and the identity tables are untouched.
+        Assert.Equal(lessonsBefore, await LessonRows(db));
+        Assert.Equal(activitiesBefore, await ActivityRows(db));
+        Assert.Equal(indexesBefore, await Indexes(db));
+        Assert.Equal(usersBefore, await UserRows(db));
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        Assert.False(db.Database.HasPendingModelChanges());
+
+        // The student level check reproduces the lesson one value by value, and the name check is there.
+        var studentLevel = await Constraint(db, "CK_Student_Level");
+        var lessonLevel = await Constraint(db, "CK_Lesson_Level");
+        Assert.Equal(lessonLevel.Replace("Lesson", "Student"),
+            studentLevel.Replace("Student", "Lesson"));
+        Assert.Contains("btrim", await Constraint(db, "CK_Student_Name"));
+        var unique = await db.Database.SqlQueryRaw<string>("""
+            SELECT indexdef AS "Value" FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = 'LessonAssignments' AND indexdef LIKE '%UNIQUE%'
+            """).ToArrayAsync();
+        Assert.Contains(unique, x => x.Contains("StudentId") && x.Contains("LessonId"));
+        // Both foreign keys of the assignment cascade, and none of them reaches a lesson's contents.
+        var cascades = await db.Database.SqlQueryRaw<string>("""
+            SELECT conname || ':' || confdeltype::text AS "Value" FROM pg_constraint
+            WHERE conrelid = '"LessonAssignments"'::regclass AND contype = 'f' ORDER BY conname
+            """).ToArrayAsync();
+        Assert.Equal(2, cascades.Length);
+        Assert.All(cascades, x => Assert.EndsWith(":c", x));
+
+        // A student and an assignment round-trip, and the cascade removes the assignment with the student.
+        var student = new Profefacilisimo.Domain.Student(owner, "Lucía", Profefacilisimo.Domain.LessonLevel.B1, "l@example.com");
+        db.Students.Add(student);
+        db.LessonAssignments.Add(new Profefacilisimo.Domain.LessonAssignment(student.Id, lesson));
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        Assert.Equal(1, await db.LessonAssignments.CountAsync());
+        await db.Students.Where(x => x.Id == student.Id).ExecuteDeleteAsync();
+        Assert.Empty(await db.LessonAssignments.ToListAsync());
+        Assert.Equal(lessonsBefore, await LessonRows(db));
+        Assert.Equal(activitiesBefore, await ActivityRows(db));
+
+        // Reverse migration drops only the two new tables and cannot lose an assignment: there were
+        // none before this migration. No lesson, activity or account is affected.
+        await migrator.MigrateAsync("20260923073000_AddCalculatedLessonDuration");
+        Assert.Equal(lessonsBefore, await LessonRows(db));
+        Assert.Equal(activitiesBefore, await ActivityRows(db));
+        Assert.Equal(indexesBefore, await Indexes(db));
+        Assert.Equal(usersBefore, await UserRows(db));
+    }
+
+    // The label comes from the test, never from user input, and the alternatives are closed so the
+    // helper is a lookup, not a query builder. A raw literal avoids parameterising an identifier.
+    private static Task<string> Constraint(AppDbContext db, string name) =>
+        db.Database.SqlQueryRaw<string>(name switch
+        {
+            "CK_Student_Level" => """SELECT pg_get_constraintdef(oid) AS "Value" FROM pg_constraint WHERE conname = 'CK_Student_Level'""",
+            "CK_Student_Name" => """SELECT pg_get_constraintdef(oid) AS "Value" FROM pg_constraint WHERE conname = 'CK_Student_Name'""",
+            "CK_Lesson_Level" => """SELECT pg_get_constraintdef(oid) AS "Value" FROM pg_constraint WHERE conname = 'CK_Lesson_Level'""",
+            _ => throw new ArgumentOutOfRangeException(nameof(name))
+        }).SingleAsync();
+
+    private static Task<string[]> UserRows(AppDbContext db) => db.Database.SqlQueryRaw<string>("""
+        SELECT "Id"::text || ':' || "UserName" AS "Value" FROM "AspNetUsers" ORDER BY "Id"
+        """).ToArrayAsync();
+
+    private static Task<string[]> LessonRows(AppDbContext db) => db.Database.SqlQueryRaw<string>("""
+        SELECT to_jsonb(l)::text AS "Value" FROM "Lessons" l ORDER BY l."Id"
+        """).ToArrayAsync();
+
+    private static Task<string[]> ActivityRows(AppDbContext db) => db.Database.SqlQueryRaw<string>("""
+        SELECT to_jsonb(a)::text AS "Value" FROM "Activities" a ORDER BY a."Id"
+        """).ToArrayAsync();
+
+    private static Task<string[]> Indexes(AppDbContext db) => db.Database.SqlQueryRaw<string>("""
+        SELECT indexdef AS "Value" FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename IN ('Lessons', 'Activities') ORDER BY indexname
+        """).ToArrayAsync();
+}
+
 // Its own class on purpose: IClassFixture gives every test class an isolated pf_test_* database,
 // so this fixture's rows cannot leak into the soft-delete migration test above.
 public class LessonDurationMigrationTests(ApiFixture fixture) : IClassFixture<ApiFixture>

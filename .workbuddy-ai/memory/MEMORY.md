@@ -15,8 +15,25 @@ Fuente de verdad del producto: `README.md` + `docs/`. No duplicar aquí lo que y
   `MSB3021/MSB3027` al copiar los .dll. Es fallo de copia, no de compilación: verificar con
   `dotnet build backend/Infrastructure/Infrastructure.csproj --no-restore`.
 - **El entorno crea commits automáticamente**: árbol limpio ≠ nada commiteado.
-- Correr siempre los tests de integración con `TEST_DATABASE_CONNECTION='<ConnectionString>'`; usan
-  PostgreSQL real (`localhost:5432`), nunca EF InMemory. Credenciales en `.tools/local-settings.json`.
+- Tests de integración: siempre con `TEST_DATABASE_CONNECTION='<ConnectionString>'`; usan PostgreSQL
+  real (`localhost:5432`), nunca EF InMemory. Credenciales en `.tools/local-settings.json`.
+
+## Migraciones EF (`dotnet ef`) — operativa
+
+- **Binario**: `~/.dotnet/tools/dotnet-ef.exe`. Necesita **`Jwt__SigningKey` además de la conexión**
+  (`ConnectionStrings__Default`), o el startup project falla al arrancar.
+- **Tres bases en el mismo contenedor** (`docker compose exec -T postgres`): `profefacilisimo` (dev),
+  `pf_integration` (tests de integración), `pf_e2e` (Playwright). **Cada una lleva su propio
+  `__EFMigrationsHistory`**: aplicar una migración en dev **no** la aplica a las otras.
+- Comprobar qué falta:
+  `docker compose exec -T postgres psql -U profefacilisimo -d <db> -c 'SELECT "MigrationId" FROM "__EFMigrationsHistory" ORDER BY "MigrationId";'`
+- Aplicar (dev):
+  `ConnectionStrings__Default='<cadena>' Jwt__SigningKey='<clave>' ASPNETCORE_ENVIRONMENT=Development ~/.dotnet/tools/dotnet-ef database update --project backend/Infrastructure --startup-project backend/Api --no-build`
+- **`42P01: relation "X" does not exist`** = migración no aplicada en *esa* base, casi nunca un bug de
+  código. Verificar `__EFMigrationsHistory` antes de tocar entidades o el `DbContext`.
+- `scripts/Setup.ps1` y `scripts/Test-E2E.ps1` ya hacen `database update`; el fallo solo aparece cuando
+  se arranca la API a mano (`dotnet run`) contra una base sin migrar.
+- Un worktree nuevo **no** tiene `obj/` → `dotnet-ef` no ve migraciones; ver bootstrap abajo.
 
 ## Convenciones del repo
 
@@ -25,18 +42,49 @@ Fuente de verdad del producto: `README.md` + `docs/`. No duplicar aquí lo que y
 - Frontend: React + TS + Vite, TanStack Query, RHF, Zod. `tsconfig.json` solo incluye `src` → `e2e/`
   queda fuera de `tsc -b`.
 - Scripts de verificación (PowerShell): `scripts/Test.ps1`, `scripts/Test-E2E.ps1` (Debug o Release).
-- Fases 1–3 cerradas (base, Class Builder, Lesson Player). Próxima: Fase 4 Student Management
-  (solo documentada en `docs/student-management.md`, sin implementar).
+- Fases 1–4 implementadas (base, Class Builder, Lesson Player, **Student Management**).
 
 ## Trampas de tests (costosas de redescubrir)
+
+### Backend
 
 - **`IClassFixture` crea una base `pf_test_*` por CLASE de test, no por test.** Dos tests que insertan
   en la misma clase se contaminan (rompen `CountAsync`): separarlos en clases distintas.
 - **EF Core**: añadir hijos nuevos a un padre **ya existente** (`Unchanged`) los marca `Modified` en vez
   de `Added` → `UPDATE` en vez de `INSERT` → `DbUpdateConcurrencyException` (0 filas).
   Añadirlos explícitamente (`db.Activities.AddRange(...)`) o dentro de un padre también nuevo.
+- **`SqlQueryRaw`: citar todo identificador con mayúsculas.** `Id::text` se pliega a `id` y da
+  `42703: column "id" does not exist`; correcto: `"Id"::text`.
+- **Credenciales**: usar la cadena de `.tools/local-settings.json`; una inventada da `28P01`.
+
+### Frontend / vitest
+
 - **jsdom no implementa el scroll**: define `Element.prototype.scrollTop` (accesorio) pero **no**
   `scrollTo` ni `scrollIntoView`. Usar `elemento.scrollTop = 0` en producción y verificar con accesorio propio.
+- **Formularios RHF + Zod con transformaciones**: los valores por defecto deben tener la forma de
+  **entrada** (todo `string`), no la de salida (`null`), o el resolver falla con
+  `Invalid input: expected string, received null`. `useForm<FormValues, unknown, Values>` + tercer genérico.
+- **Carrera de `findBy*` con estados de carga**: si un enlace/etiqueta existe en ambos estados, anclar
+  en algo exclusivo del estado cargado (`findByTestId(...)`, `findByRole('option', …)`).
+- **`getByText('B1')` choca con `<option value="B1">`**: en modo estricto acotar el nodo.
+- **Un `Response` solo se lee una vez**: en dobles con varias llamadas usar
+  `mockImplementation(async () => new Response(...))`, no `mockResolvedValue(...)` (`Body is unusable`).
+- **Orden en helpers `page()`**: el helper instala los dobles por defecto y el test **los sobrescribe
+  después**; al revés el helper los pisa.
+
+## Trampas de CSS (costosas de redescubrir)
+
+- **La regla global `form { display: flex; flex-direction: column; margin-top: 26px; }`** (styles.css
+  línea 15) se hereda en cualquier `<form>` con clase propia. Si la clase no declara
+  `flex-direction: row`, el formulario apila en **columna** aunque ponga `flex-wrap: wrap`, y
+  `align-items` alinea cada hijo en su propio renglón. `.students-filters` cayó en esto; `.lesson-filters`
+  no, porque sí declara `flex-direction: row`.
+- **`.card` limita a `min(100%, 470px)` y pisa a cualquier clase de ancho.** Las páginas llevan
+  `className="card <pagina>"`, así que un `.students-page { width: min(100%, 880px) }` **nunca se usa**:
+  hace falta `.card.<pagina>` (más especificidad) para ensanchar de verdad.
+- **Verificar CSS en Playwright midiendo, no mirando capturas.** Medir en `page.evaluate` el ancho
+  computado y `getBoundingClientRect()` de cada hijo. Una captura puede ser de una corrida anterior
+  aunque la ruta del PNG sea nueva, y lleva a conclusiones falsas sobre si el cambio se aplicó.
 
 ## Verificar el frontend con navegador real (Playwright)
 
@@ -52,14 +100,37 @@ dotnet run --project backend/Api --no-build --no-launch-profile --urls http://lo
 
 # 3. Runner (arranca Vite él mismo vía webServer)
 cd frontend && npx playwright test --reporter=list
-# Al terminar: parar la API y dropdb --if-exists --force -U "$POSTGRES_USER" pf_e2e
+# Al terminar: parar la API y dropdb --if-exists --force -U profefacilisimo pf_e2e
 ```
 
 - Playwright: `getByLabel('Pregunta 1')` también casa con el `aria-label` «Quitar pregunta 1» →
   usar `{ exact: true }`. `getByText` en strict mode puede casar dos nodos (total = duración):
   anclar al nodo correcto (`getByText('Duración total:')`, `.activity-duration`).
-- Los E2E escriben capturas en `.tools/` (ignorado). Si la ejecución falla deja artefactos en
-  `frontend/test-results/`: borrarlos en un turno aparte (el sandbox bloquea borrados >50 ficheros).
+- Colisión de nombre accesible: el enlace del nombre y «Editar \<nombre\>» casan ambos con
+  `getByRole('link', { name })` → `{ exact: true }`.
+- **Auth en E2E: no hay cookies de sesión, solo Bearer.** El login devuelve el `accessToken` en el
+  cuerpo y la app lo guarda **en memoria**. `page.request` comparte cookies pero **no** cabecea el
+  token: `POST /api/lessons` sale **401**. Patrón: capturar la respuesta de `/api/auth/login` con
+  `page.waitForResponse`, sacar `session.accessToken` y pasarlo como header
+  (`{ Authorization: 'Bearer ' + token }`).
+- **Sí hay cookie de refresh** (`pf.refresh`, `httponly`, `path=/api/auth`, la pone el login). Al
+  recargar, la app la usa (`POST /api/auth/refresh`) y **mantiene la sesión**: `page.reload()` es
+  seguro y sirve para vaciar la caché en memoria de TanStack Query.
+- **Caché de la query de listado:** `signIn` termina en `/` y cachea el listado vacío. Si un recurso se
+  crea por API después, el selector reutiliza esa caché vacía («No tienes clases activas que asignar.»).
+  Solución: `page.reload()` tras crearlo.
+- **Detach al restaurar**: tras pulsar «Restaurar», el refetch quita la fila y el clic sobre su enlace
+  falla con «element was detached from the DOM». Esperar «La papelera está vacía.» y navegar por el
+  enlace «Volver a Mis estudiantes».
+- **El shim de borrado del sandbox bloquea a Playwright**: al arrancar limpia su `outputDir`
+  (`test-results/`) y el borrado en bloque (>50 ficheros) falla con `SAFE_DELETE_BULK_CONFIRM_REQUIRED`.
+  Mitigación sin tocar el repo: un `playwright.config.ts` temporal con
+  `outputDir: process.env.PW_OUT || './.tools-pw-results'` y lanzar con
+  `PW_OUT=C:/Users/al148/AppData/Local/Temp/pfout npx playwright test --config .tools-playwright.config.ts …`
+  (el temp de Windows queda fuera del conjunto protegido). Borrar el config temporal al terminar.
+  **Ojo**: `frontend/.tools-pw-results/` **no** lo cubre el `.gitignore` (el patrón es `.tools/` anclado)
+  y el sandbox **no puede borrarlo** (`genie-trash` falla con «Some operations were aborted»). Antes de
+  commitear, borrarlo a mano o añadir el patrón; si no, aparece como `?? frontend/.tools-pw-results/`.
 
 ## Flujo de especificaciones
 
@@ -68,15 +139,30 @@ cd frontend && npx playwright test --reporter=list
 - **Specs paralelas** (`*-parallel.md` de `multi-ag-spec`): manda el §5 del plan, no el nombre del fichero.
   Rama de integración `spec-NN-slug` desde `main` + una rama `spec-NN-slug--<flujo>` por flujo.
   Con una sola sesión se ejecutan los flujos en secuencia sobre ramas (sin worktree: §1 lo autoriza).
-- **Resources de escritor único** en specs con backend: `backend/Infrastructure/Migrations/` y
+- **Recursos de escritor único** en specs con backend: `backend/Infrastructure/Migrations/` y
   `AppDbContextModelSnapshot.cs` no admiten dos escritores (el snapshot se regenera entero).
+- Al enmendar la spec, tocar **solo la política de ejecución** (§10); §11 (criterios de aceptación) es
+  intocable, como exige la regla «Criterios de aceptación y spec: nunca se editan».
+
+## Trampa del plan paralelo: los flujos acaban en el mismo árbol
+
+Los worktrees de §5 **no se usaron** en SPEC 04: los tres flujos viven en el checkout principal y las
+ramas `--contract` / `--backend` no contienen trabajo real. Consecuencias:
+
+- **`git status` es la única fuente fiable del punto de reanudación.** El entorno auto-commitea
+  mientras el trabajo de un flujo queda sin commitear. `git log` engaña.
+- **Un flujo de frontend no se puede verificar si depende de un fichero de otro flujo sin ejecutar.**
+  Caso real: `AssignedStudents.test.tsx` (Flujo B) hace `vi.mock('./student-api')`, y `tsc -b` **resuelve
+  el módulo real igualmente** → si `student-api.ts` (Flujo C) no existe, da `TS2307` más los `TS7006` en
+  cascada. No es caché (`tsc -b --clean` lo reproduce). Ordenar B **después** de C, o verificar en la
+  integración con los dobles sin editar.
 
 ## Trabajo paralelo multiagente (worktrees)
 
 - **Un worktree nuevo NO compila tal cual.** `.gitignore` excluye `obj/`, `bin/`, `node_modules/`,
   `.tools/`, `test-results/`. Bootstrap antes de dárselo a un agente:
   1. Copiar `obj/` del checkout principal para `backend/{Domain,Application,Infrastructure,Api}` y
-     `tests/{Domain.Tests,Integration.Tests}`; verificar dentro del worktree con
+     `tests/{Domain.Tests,Integration.Tests}`; verificar con
      `dotnet build backend/Infrastructure/Infrastructure.csproj --no-restore`.
   2. Copiar `.tools/local-settings.json` (tests de integración y `dotnet ef`).
   3. `cp -r` `frontend/node_modules` del checkout principal (~186 MB, minutos, sin red).
@@ -92,9 +178,14 @@ cd frontend && npx playwright test --reporter=list
   «Iniciar clase» → «Página no encontrada» porque el Flujo C añadió el enlace pero la `<Route>` del Flujo A
   seguía sin fusionar. Los tests de componente verdes por separado **no** lo detectan: cada suite prueba su
   mitad. Comprobación rápida en navegador real: `curl -s http://localhost:5173/src/App.tsx | grep play`.
-- **Clases del reproductor**: las CSS salen de las listas C3 de la spec, no del marcado.
-  `player-activity-title` / `player-activity-duration` / `player-instructions` son `data-testid` de E2E;
-  la clase de las instrucciones es `player-activity-instructions`.
+- **Un enlace puede existir sin su ruta si los flujos viven en ramas separadas** — idem arriba.
+- **Clases CSS y del componente deben coincidir letra a letra** con las listas C3/C4 de la spec
+  (`player-activity-instructions`, `student-assigned-lessons`, …). Grepear las clases contra `styles.css`
+  antes de cerrar: si no, el E2E de integración no encuentra el nodo.
+  `player-activity-title` / `player-activity-duration` / `player-instructcions`… ver docs de SPEC 03.
+- **No existe página de detalle de clase**: el «detalle» es el editor (`/lessons/:id/edit`).
+- Los E2E escriben capturas en `.tools/` (ignorado). Si la ejecución falla deja artefactos en
+  `frontend/test-results/`: borrarlos en un turno aparte (el sandbox bloquea borrados >50 ficheros).
 
 ## Lote de correcciones de diseño (`design-fixes`) — reglas del usuario (2026-09-25)
 

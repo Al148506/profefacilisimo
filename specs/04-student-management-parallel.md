@@ -207,7 +207,7 @@ compile con el import que necesita.
 | **Entregable**                               | `AssignedStudents.tsx` renderiza la lista (nombre, nivel, enlace a la ficha, marca «En papelera»), el estado vacío, el selector de estudiantes activos y **Quitar asignación**, contra dobles de prueba con la forma congelada de C1 y C3. |
 | **Archivos que posee (escritura exclusiva)** | `frontend/src/students/AssignedStudents.tsx` (implementación; el stub lo crea la Fase 0), `frontend/src/students/AssignedStudents.test.tsx`                |
 | **Archivos compartidos (solo lectura)**      | `frontend/src/students/student-api.ts` (aún no existe: se consume desde la forma congelada de C3 y los dobles), `frontend/src/students/student-schema.ts`, `frontend/src/styles.css`, `frontend/src/lessons/LessonEditorPage.tsx` |
-| **Depende de**                               | Fase 0 (`contrato`): C1, C3, C4 y C5. De A depende solo en tiempo de ejecución (`contrato`, suave)                                                        |
+| **Depende de**                               | Fase 0 (`contrato`): C1, C3, C4 y C5. De A depende solo en tiempo de ejecución (`contrato`, suave). El suite de B se ejecuta sobre una rama nacida de `students-ui` (§10, «Salvedad de ejecución»), porque los dobles de `./student-api` necesitan que el módulo exista para `tsc -b` |
 | **Bloquea a**                                | La fase de integración (I6 e I7)                                                                                                                         |
 | **Rama**                                     | `spec-04-student-management--assigned-students`                                                                                                          |
 | **Worktree**                                 | `../pf-wt-assigned-students`                                                                                                                              |
@@ -536,6 +536,14 @@ eso **los ficheros del §7 se escriben dentro de su flujo, tal como los lista la
 y `LessonAssignmentTests.cs` dentro del Flujo A. Lo que la política prohíbe durante la fase paralela es
 lo de siempre: objetivos de cobertura, suites completas, refactorización de fixtures y el E2E. Las
 suites existentes se ejecutan una sola vez por flujo como red de regresión, no en cada tarea.
+
+**Salvedad de ejecución (dos ramas de frontend, un solo `student-api.ts`).** El Flujo C es el dueño de
+`student-api.ts`, y `AssignedStudents.test.tsx` (Flujo B) ejecuta sus dobles contra los nombres
+congelados en C3, no contra el transporte real. Sobre la rama de B el módulo **no existe**, así que
+`npx tsc -b` y `npx vitest run` no se pueden ejecutar ahí. Se ejecutan sobre una rama de B creada
+**desde `students-ui`** —las dos ramas nacen de la misma base, así que B no adquiere deuda de C— o, si
+B se ejecuta antes que C, en la fase de integración. En los dos casos la comprobación es la misma:
+`npx tsc -b`, `npx eslint .` y el suite de B **sin editar sus dobles**.
 
 ---
 

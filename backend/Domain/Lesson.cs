@@ -9,6 +9,7 @@ public sealed record ActivityDraft(Guid? Id, string Title, string Instructions, 
 public sealed class Lesson
 {
     private readonly List<Activity> _activities = [];
+    private readonly List<LessonAssignment> _assignments = [];
     private Lesson() { }
 
     public Lesson(Guid userId, string title, LessonLevel level, string topic, string objective,
@@ -41,6 +42,11 @@ public sealed class Lesson
     public DateTimeOffset UpdatedAt { get; private set; }
     public DateTimeOffset? DeletedAt { get; private set; }
     public IReadOnlyCollection<Activity> Activities => _activities.AsReadOnly();
+
+    // Read-only on purpose: an assignment is never written through the lesson. The two operations
+    // that change it live in the assignment service, so assigning or removing one never touches the
+    // lesson's content, its activities, its total or its UpdatedAt.
+    public IReadOnlyCollection<LessonAssignment> Assignments => _assignments.AsReadOnly();
 
     public void UpdateMetadata(string title, LessonLevel level, string topic, string objective)
     {
@@ -197,6 +203,18 @@ internal static class Rules
 
     public static int? Duration(int? value) => value is <= 0
         ? throw new ArgumentOutOfRangeException(nameof(value), "Duration must be positive minutes.") : value;
+
+    // An optional text field: a missing or blank value is stored as null, never as an empty string,
+    // so a reader can always tell "not filled in" from "filled in". A value over the limit is
+    // rejected instead of being silently truncated.
+    public static string? Optional(string? value, int max, string name)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+        if (trimmed.Length > max)
+            throw new ArgumentException($"{name} cannot exceed {max} characters.", name);
+        return trimmed;
+    }
 
     // Editor writes always carry a duration, unlike legacy rows where null is preserved.
     public static int RequiredDuration(int value) => value <= 0

@@ -49,7 +49,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
     <p className="eyebrow">Tu espacio como profe</p>
     <h1>{trash ? 'Papelera' : 'Mis clases'}</h1>
     <nav className="lesson-navigation">{trash ? <Link to="/">Volver a Mis clases</Link> : <>
-      <Link className="button" to="/lessons/new">Crear clase</Link><Link to="/lessons/trash">Papelera</Link>
+      <Link className="button" to="/lessons/new">Crear clase</Link><Link to="/lessons/trash">Papelera</Link><Link to="/students">Estudiantes</Link>
     </>}</nav>
     <p>{trash ? 'Restaura tus clases o elimínalas definitivamente.' : 'Encuentra tus clases por título o nivel.'}</p>
     {!trash && <form className="lesson-filters" onSubmit={(event) => { event.preventDefault(); setFilters({ search: search.trim(), level }); }}>

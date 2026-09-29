@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Profefacilisimo.Application;
+using Profefacilisimo.Application.Students;
 using Profefacilisimo.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +40,10 @@ builder.Services.AddIdentityCore<AppUser>(options =>
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ILessonReader, LessonReader>();
 builder.Services.AddScoped<ILessonService, LessonService>();
+builder.Services.AddScoped<StudentReader>();
+builder.Services.AddScoped<IStudentReader>(provider => provider.GetRequiredService<StudentReader>());
+builder.Services.AddScoped<IStudentService, StudentService>();
+builder.Services.AddScoped<ILessonAssignmentService, LessonAssignmentService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
     options.MapInboundClaims = false;
@@ -135,6 +140,7 @@ auth.MapGet("/me", async (ClaimsPrincipal principal, IAuthService service) =>
     return user is null ? Results.Unauthorized() : Results.Ok(user);
 }).RequireAuthorization();
 app.MapLessonEndpoints();
+app.MapStudentEndpoints();
 app.Run();
 
 static bool ValidCredentials(string? email, string? password, bool registration) =>

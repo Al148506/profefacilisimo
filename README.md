@@ -6,9 +6,8 @@ crear y estructurar una clase sin preparar cada actividad desde cero,
 impartirla con el Lesson Player y, en la siguiente fase, organizar su
 trabajo en función de sus estudiantes.
 
-> **Estado:** Fases 1–3 implementadas (base, Class Builder, Lesson Player).\
-> **Próxima fase:** Fase 4 — Student Management (documentación conceptual en
-> [SPEC 04](docs/student-management.md); sin implementar todavía).\
+> **Estado:** Fases 1–4 implementadas (base, Class Builder, Lesson Player, Student Management).\
+> **Próxima fase:** Fase 5 — pendiente de definir.\
 > **Objetivo inicial:** validar si un creador de clases estructuradas reduce
 > el tiempo de preparación para profesores de español.
 
@@ -117,11 +116,10 @@ Writing
 Cierre
 ```
 
-### Student Management (Fase 4 — próxima, sin implementar)
+### Student Management (Fase 4 — implementada)
 
 Permite mantener información básica de cada estudiante y asociar clases
-existentes con él, sin convertirse en un sistema de gestión educativa. El
-alcance y el modelo conceptual están definidos en
+existentes con él, sin convertirse en un sistema de gestión educativa. Ver
 [SPEC 04 — Student Management](docs/student-management.md).
 
 ------------------------------------------------------------------------
@@ -180,7 +178,7 @@ Iniciar Lesson Player
 Utilizar la clase con el estudiante
 ```
 
-### 6.2 Ampliación prevista (Fase 4 — no implementada)
+### 6.2 Ampliación (Fase 4 — implementada)
 
 ``` text
 Profesor
@@ -336,7 +334,7 @@ Cada actividad comparte propiedades básicas:
 -   Order.
 -   EstimatedDuration.
 
-### 9.2 Evolución prevista (Fase 4 — no implementada)
+### 9.2 Evolución (Fase 4 — implementada)
 
 La Fase 4 introduce `Student` como entidad en paralelo a `Lesson`, ambas
 colgando del profesor:
@@ -350,7 +348,7 @@ User
 ```
 
 `Students` **no** contiene clases y `Lesson` **no** contiene estudiantes: la
-relación entre ambos se resolverá mediante una entidad intermedia (ver
+relación entre ambos se resuelve mediante una entidad intermedia (ver
 apartado 9.3).
 
 ### 9.3 Decisión de dominio: una `Lesson` no pertenece a un único estudiante
@@ -405,21 +403,21 @@ Representa una clase completa.
 
 Representa una actividad perteneciente a una clase.
 
-### Previstas (Fase 4 — no implementadas)
+### Implementadas (Fase 4)
 
 #### Student
 
-Representa a un alumno del profesor. Propuesta inicial de campos: `Id`,
-`Name`, `Email`, `Level`, `NativeLanguage`, `Interests`, `Goals`, `Notes`,
-`CreatedAt`, `UpdatedAt`. Son una propuesta que podrá ajustarse durante la
-implementación de la SPEC; el sistema almacena únicamente información
-relevante para preparar clases (sin teléfono, dirección, datos financieros
-ni médicos). Detalle en [SPEC 04](docs/student-management.md).
+Representa a un alumno del profesor. Campos: `Id`, `Name`, `Email`, `Level`,
+`NativeLanguage`, `Interests`, `Goals`, `Notes`, `CreatedAt`, `UpdatedAt` y
+`DeletedAt` (borrado lógico). El sistema almacena únicamente información
+relevante para preparar clases (sin teléfono, dirección, datos financieros ni
+médicos). Detalle en [SPEC 04](docs/student-management.md).
 
 #### LessonAssignment
 
 Entidad intermedia para la relación N:M entre `Student` y `Lesson` (apartado
-9.3). Sólo se implementará si es necesario para la asignación de clases.
+9.3). Campos: `Id`, `StudentId`, `LessonId` y `AssignedAt`. Índice único
+sobre `(StudentId, LessonId)`.
 
 Se evita crear entidades adicionales como `Course`, `Classroom` o
 `Institution` hasta comprobar que son necesarias.
@@ -467,7 +465,7 @@ marcadas como próximas están documentadas pero no implementadas.
 -   Regresar a la actividad anterior.
 -   Mostrar progreso dentro de la clase.
 
-### Gestión de estudiantes — próxima (Fase 4 / SPEC 04)
+### Gestión de estudiantes — implementada (Fase 4 / SPEC 04)
 
 Base mínima para personalizar y organizar el trabajo del profesor, sin
 convertirse en un sistema completo de gestión educativa:
@@ -559,9 +557,9 @@ Esta lista existe para proteger el alcance del producto.
 ### Gestión de estudiantes
 
 La gestión de estudiantes se divide en dos niveles. **Ya no se considera
-«fuera del alcance» en bloque**: su versión básica es la próxima fase.
+«fuera del alcance» en bloque**: su versión básica está implementada.
 
-#### Student Management básico — próxima fase (Fase 4 / SPEC 04)
+#### Student Management básico — implementado (Fase 4 / SPEC 04)
 
 -   Perfil básico (nombre, contacto, nivel, idioma nativo).
 -   Información pedagógica (objetivos, intereses).
@@ -757,14 +755,14 @@ Ver [SPEC 01](docs/class-management.md) (gestión de clases) y
 -   Indicador de progreso.
 -   Vista optimizada para utilizar durante una clase.
 
-### Fase 4 — Student Management — PRÓXIMA
+### Fase 4 — Student Management — COMPLETADA
 
 -   CRUD de estudiantes.
 -   Perfil básico y pedagógico.
 -   Asignación de clases existentes a estudiantes.
 -   Ver las clases asignadas desde el perfil y los estudiantes desde la clase.
 
-Ver [SPEC 04](docs/student-management.md). **Sin implementar todavía.**
+Ver [SPEC 04](docs/student-management.md).
 
 ### Fase 5 — Lesson Sessions — FUTURA
 
@@ -834,10 +832,8 @@ Decisiones que deberán resolverse durante el desarrollo:
 -   Estrategia de almacenamiento del contenido de actividades.
 -   Necesidad de drag & drop para ordenar actividades.
 -   Implementación inicial de autenticación.
--   **Modelo definitivo de `Student` y necesidad real de `LessonAssignment`
-    en la Fase 4** (ver [SPEC 04](docs/student-management.md)).
--   **Cómo se materializa la asignación de clases: entidad intermedia o
-    relación directa, según lo que exija la SPEC.**
+-   **Modelo de `Student` y de `LessonAssignment`: resueltos en la Fase 4**
+    (ver [SPEC 04](docs/student-management.md)).
 -   Proveedor de IA para versiones futuras.
 -   Proveedor de Text-to-Speech.
 -   Estrategia de monetización, si el producto se valida.
@@ -905,7 +901,7 @@ dependerá de la validación de la anterior.
 | SPEC 01 | [Gestión de clases](docs/class-management.md) | Implementada |
 | SPEC 02 | [Editor de actividades](docs/activity-editor.md) | Implementada |
 | SPEC 03 | [Reproductor de clases](specs/03-reproductor-de-clases.md) | Implementada |
-| SPEC 04 | [Student Management](docs/student-management.md) | Documentada — sin implementar |
+| SPEC 04 | [Student Management](docs/student-management.md) | Implementada |
 
 -   [Fase 1 — Base](docs/phase-1.md): arranque de la aplicación y decisiones
     técnicas iniciales.
