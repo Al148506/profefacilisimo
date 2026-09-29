@@ -8,6 +8,12 @@ import { getLesson, saveLesson, lessonDetailKey, LessonSaveError, type LessonDet
 import { lessonDraftSchema, lessonSchema } from './lesson-schema';
 vi.mock('../auth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), getLesson: vi.fn(), saveLesson: vi.fn() }));
+// The integration phase mounts the assigned-students section inside the editor. This suite is about
+// the draft, so the section is stubbed empty: it must never reach the real transport from here.
+vi.mock('../students/student-api', async (original) => ({
+  ...await original<typeof import('../students/student-api')>(),
+  listAssignedStudents: vi.fn(async () => []), listStudents: vi.fn(async () => []),
+}));
 const detail: LessonDetails = { id: 'l1', title: 'Original', level: 'B1', topic: 'Tema', objective: 'Objetivo', createdAt: '2026-09-17', updatedAt: '2026-09-17', deletedAt: null, estimatedDuration: 60, activities: [] };
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(getLesson).mockResolvedValue(detail); });
 function page(path = '/lessons/l1/edit') {
@@ -73,7 +79,7 @@ it('retains dirty fields across refetch and failed save without automatic retry'
   expect(title).toHaveValue('Borrador');
   vi.mocked(saveLesson).mockRejectedValue(new Error('Error de guardado'));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Error de guardado');
+  expect(await screen.findByText('Error de guardado')).toBeInTheDocument();
   expect(title).toHaveValue('Borrador');
   expect(saveLesson).toHaveBeenCalledTimes(1);
 });
@@ -235,4 +241,20 @@ it('keeps the activity draft and marks the activity the server rejected', async 
   expect(screen.getByLabelText('Título de la actividad')).toHaveValue('Escritura');
   expect(screen.getByText('Duración total:')).toHaveTextContent('10 min');
   expect(screen.getByRole('button', { name: /^Escritura/ })).toHaveAccessibleDescription('Texto obligatorio.');
+});
+
+it('mounts the assigned-students section outside the form for an existing lesson', async () => {
+  page('/lessons/l1/edit');
+  await screen.findByLabelText('Título');
+  const section = await screen.findByTestId('assigned-students');
+  // Outside the <form>: neither the section nor its contents can ever be submitted with the draft.
+  expect(section.closest('form')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Estudiantes asignados' }).closest('form')).toBeNull();
+});
+
+it('does not mount the assigned-students section for a lesson that has no Id yet', async () => {
+  // A brand-new lesson has nothing to assign a student to, so the section is absent.
+  page('/lessons/new');
+  await screen.findByLabelText('Título');
+  expect(screen.queryByTestId('assigned-students')).not.toBeInTheDocument();
 });

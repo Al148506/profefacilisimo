@@ -22,7 +22,7 @@ small.error { min-height: 15px; margin-bottom: 12px; }
 button, .button { font: inherit; font-weight: 600; background: #234e41; border: 1px solid #234e41; color: white; padding: 13px 18px; border-radius: 10px; cursor: pointer; text-align: center; text-decoration: none; display: inline-block; }
 button:hover, .button:hover { background: #173d32; }
 button:disabled { opacity: .65; cursor: wait; }
-button.secondary { background: transparent; color: #234e41; }
+button.secondary, .button.secondary { background: transparent; color: #234e41; }
 :focus-visible { outline: 3px solid #97b54d; outline-offset: 3px; }
 .error { color: #a52d31; }
 .footnote { text-align: center; font-size: 13px; margin-bottom: 0; }
@@ -151,3 +151,47 @@ button.danger { background: #8c3033; border-color: #8c3033; }
   .lesson-player-tools { width: 100%; margin-left: 0; }
   .player-activity-instructions, .player-activity-text, .player-activity-prompt, .player-activity-explanation, .player-activity-list { font-size: 16px; }
 }
+
+/* Students. The twelve classes below are frozen by the contract (C4); the shared ones (`card`,
+   `button`, `danger`, `eyebrow`, `level-badge`, `lesson-list`, `lesson-actions`, `error`, `status`,
+   `footnote`) are reused unchanged, which is why the listing below reads like the lesson one. */
+.students-page { width: min(100%, 880px); }
+/* The actions sit on their own line, level with the heading, so a long name never squeezes them. */
+.students-navigation { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 18px 0; }
+.students-filters { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin: 18px 0 22px; padding: 18px; background: #f1f5e6; border-radius: 12px; }
+/* The fields share the row; the inner `column` keeps each label above its own control. */
+.students-filters > div { display: flex; flex: 1 1 220px; flex-direction: column; gap: 6px; }
+
+/* One student per row: the name leads, the metadata follows, and the actions close the row. */
+.student-list { display: grid; gap: 14px; padding: 0; margin: 0; list-style: none; }
+.student-list > li { display: grid; gap: 6px; padding: 16px 18px; background: #f8faf3; border: 1px solid #dfe5d8; border-radius: 12px; }
+.student-list h2 { margin: 0; font-size: 18px; }
+.student-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; }
+/* The interests summary is secondary: it is a hint about the student, not the reason to open it. */
+.student-interests, .student-assigned-count { margin: 0; font-size: 14px; color: #3c5a4e; }
+
+/* The profile keeps its fields in a definition list, one pair per row, so the labels line up. */
+.student-profile { width: min(100%, 880px); }
+.student-profile-fields { display: grid; gap: 12px; margin: 20px 0 26px; }
+.student-profile-fields > div { display: grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid #eef2e6; }
+.student-profile-fields dt { font-size: 14px; font-weight: 600; color: #3c5a4e; }
+.student-profile-fields dd { margin: 0; color: #173b37; white-space: pre-line; overflow-wrap: anywhere; }
+
+/* The assigned-lessons section of the profile mirrors the assigned-students one of the editor: both
+   are a picker plus a list, and assigning never leaves the page it was done from. */
+.student-assigned-lessons, .assigned-students { margin-top: 28px; padding-top: 22px; border-top: 1px solid #dfe5d8; }
+.assigned-lessons-empty, .assigned-students-empty { color: #3c5a4e; }
+.assigned-lesson-title { margin: 0; font-size: 17px; }
+.student-picker { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 18px; }
+.student-picker select { min-width: 240px; }
+/* A trashed lesson or student stays visible and marked, but is never actionable until restored. */
+.trash-mark { font-size: 13px; font-weight: 600; color: #8a5a1f; background: #fdf0d8; border-radius: 999px; padding: 3px 10px; }
+
+@media (max-width: 600px) {
+  .students-filters { flex-direction: column; align-items: stretch; }
+  .students-filters > div { flex-basis: auto; }
+  .student-profile-fields > div { grid-template-columns: 1fr; gap: 4px; }
+  .student-actions { flex-direction: column; align-items: stretch; }
+  .student-picker select { width: 100%; min-width: 0; }
+}
+

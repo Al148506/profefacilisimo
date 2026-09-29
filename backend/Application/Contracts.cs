@@ -1,4 +1,5 @@
 using Profefacilisimo.Application.Lessons;
+using Profefacilisimo.Application.Students;
 using Profefacilisimo.Domain;
 
 namespace Profefacilisimo.Application;
@@ -27,3 +28,9 @@ public interface ILessonReader
     Task<LessonDetailsDto?> GetOwnedDetailsAsync(Guid lessonId, Guid userId, CancellationToken cancellationToken);
 }
 public record LessonSummary(Guid Id, string Title, int ActivityCount);
+
+// The student contracts live in their own namespace next to the lesson ones, and this is their
+// registration point in the shared contract surface. `IStudentReader` and `IStudentService` mirror
+// `ILessonReader` and `ILessonService`; `ILessonAssignmentService` is the single implementation behind
+// the two symmetric route pairs.
+public interface IStudentContracts : IStudentReader, IStudentService, ILessonAssignmentService;

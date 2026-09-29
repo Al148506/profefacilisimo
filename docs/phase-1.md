@@ -1,12 +1,12 @@
 # Fase 1: base implementada
 
 ## Alcance
-Frontend React/TypeScript/Vite, API .NET 10, PostgreSQL con Compose, Identity + JWT,
+Frontend React/TypeScript/Vite, API .NET 9, PostgreSQL con Compose, Identity + JWT,
 sesiones renovables, modelos Lesson/Activity y pruebas. No hay CRUD de clases,
 editor, player ni IA. La pantalla privada es un estado vacío explícito, no un dashboard simulado.
 
 ## Requisitos y arranque
-- PowerShell 7, SDK .NET 10, Node 24 y Docker Desktop con motor Linux iniciado.
+- PowerShell 7, SDK .NET 9 (global.json fija 9.0.318), Node 24 y Docker Desktop con motor Linux iniciado.
 - En esta máquina el SDK está instalado en .tools/dotnet; los scripts lo detectan.
 - Puertos locales: PostgreSQL 5432, API 5080, Vite 5173, API E2E 5081.
 - Ejecutar desde la raíz:
