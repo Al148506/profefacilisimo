@@ -236,3 +236,5 @@ button.danger { background: #8c3033; border-color: #8c3033; }
   .student-picker select { width: 100%; min-width: 0; }
 }
 
+.student-form { width: min(100%, 880px); }
+

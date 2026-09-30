@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -253,16 +253,19 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
         ? 'No pudimos conectar. Conservamos tus cambios; comprueba si se guardaron antes de reintentar.'
         : mutation.error.message}</p>}
       {mutation.isSuccess && !dirty && <p role="status">Clase guardada.</p>}
+      {/* Keyed so the two bars never share a DOM node: «Continuar» and «Guardar clase» sit in the same
+          position, and reusing the node would rewrite its type to submit while the click that changed
+          the step is still being dispatched, so the browser would then submit the form on its own. */}
       <div className="editor-actions">
         {step === 'info'
-          ? <>
+          ? <Fragment key="info">
             <button type="button" className="secondary" disabled={saving} onClick={back}>Cancelar</button>
             <button type="button" disabled={saving} onClick={() => void goToActivities()}>Continuar</button>
-          </>
-          : <>
+          </Fragment>
+          : <Fragment key="activities">
             <button type="button" className="secondary" disabled={saving} onClick={goToInfo}>Atrás</button>
             <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar clase'}</button>
-          </>}
+          </Fragment>}
       </div>
     </form>
     {/* Outside the <form> and outside the draft on purpose: assigning a student must never mark the

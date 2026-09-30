@@ -68,7 +68,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
       {students.isSuccess && <>
         {students.isFetching && <p role="status">Actualizando estudiantes…</p>}
         {students.data.length === 0
-          ? <p className="student-list-empty">{trash
+          ? <p>{trash
             ? 'La papelera está vacía.'
             : filtered ? 'No hay estudiantes que coincidan con estos filtros.' : 'Aún no tienes estudiantes.'}</p>
           : <ul className="student-list">{students.data.map((student) =>

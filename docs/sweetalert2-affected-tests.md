@@ -1,11 +1,13 @@
 # Reporte de pruebas afectadas — Notificación SwalAlert2 al guardar
 
 **Rama:** `feat/crear-clase-wizard-2-pasos` (cambio 2 del lote, sobre el wizard de 2 pasos)
-**Estado:** pendiente de pruebas funcionales manuales del usuario
-**Fecha:** 2026-09-25
+**Estado:** resuelto — ver §6
+**Fecha:** 2026-09-25 · actualizado 2026-09-29
 
-Los tests existentes **no se han modificado** ni se ha ejecutado la suite, según las reglas del lote
-(ver `docs/wizard-2-pasos-affected-tests.md` §0).
+Los tests existentes **no se habían modificado** ni se había ejecutado la suite, según las reglas del
+lote (ver `docs/wizard-2-pasos-affected-tests.md`). El 2026-09-29 el usuario autorizó una excepción
+única a esa regla y los tests se repararon; el §6 registra cómo se resolvieron los riesgos que este
+documento abría. Las secciones 1 a 5 se conservan tal como se escribieron.
 
 ## 1. Qué cambió
 
@@ -85,3 +87,25 @@ y en E2E eso significa un clic extra entre guardado y guardado.
 - Que no aparezca más de un modal por guardado.
 - Que tras «Aceptar» el flujo siga igual: al crear, la URL es `/lessons/:id/edit` en el paso 2.
 - Aspecto del modal frente al resto de la app, y a 390 px de ancho.
+
+## 6. Resolución (2026-09-29)
+
+Se ejecutó la suite y los cuatro E2E. Resultado punto por punto sobre lo que este documento abría:
+
+| Punto | Qué se predijo | Qué pasó realmente |
+| --- | --- | --- |
+| §2 · carrera del foco en `disables the wizard controls…` | La alerta abierta podía robar el foco y disparar el `confirm` que el test espera que no se dispare | **No ocurrió.** Se resolvió de raíz mockeando el módulo entero: `vi.mock('../notifications', …)` en `LessonEditorPage.test.tsx:21`. SweetAlert2 no llega a montar en jsdom, así que no hay foco que robar. El test además afirma `expect(notifyLessonSaved).toHaveBeenCalledTimes(1)` (línea 114) |
+| §3 · `e2e/lessons.spec.ts` y el `<p role="status">` | `toHaveText` debería resolver pese a la alerta superpuesta | **No resolvía, pero por otro motivo.** Mientras la alerta está abierta SweetAlert2 pone `aria-hidden="true"` en todos los demás hijos de `<body>`, y `getByRole` usa `includeHidden: false`: no es un problema de visibilidad CSS sino de accesibilidad. Los specs cierran la alerta con «Aceptar» antes de afirmar nada por rol |
+| §3 · helper `save()` de `lesson-builder.spec.ts`, «el punto más probable de fallo real» | La alerta abierta interceptaría los clics siguientes | **Acertado en el diagnóstico y equivocado en la causa.** El spec fallaba de forma determinista justo después de `save()`, pero el clic no lo interceptaba la alerta: la clase se había guardado **sola** al pulsar «Continuar». Era un defecto funcional del wizard, no del E2E — causa raíz, evidencia y corrección en `docs/wizard-2-pasos-affected-tests.md` §7.2 |
+| §5 · comprobaciones manuales | Pendientes | El usuario probó a mano el wizard y las notificaciones el 2026-09-29 y **confirmó que funcionan**; con esa confirmación se autorizó borrar la rama de la feature |
+
+Verificación tras la reparación: `npx tsc -b` ✓ · `npx eslint .` ✓ · `npx vitest run` ✓ 20 archivos /
+169 tests · los 4 specs E2E en verde ejecutados archivo por archivo.
+
+**Aviso para el trabajo pendiente.** Si una fase posterior unifica las confirmaciones en SweetAlert2, el
+blast radius en tests es mayor que en código fuente: hay **12 `vi.spyOn(window, 'confirm')` repartidos en
+6 archivos** (`ActivityForm.test.tsx:77,99` · `LessonEditorPage.test.tsx:116,124` ·
+`LessonsPage.test.tsx:157,165,181` · `StudentProfilePage.test.tsx:82` · `StudentsPage.test.tsx:93,107` ·
+`StudentsTrashPage.test.tsx:47,55`) que dejarán de interceptar nada y habrá que sustituir por mocks del
+módulo de notificaciones, siguiendo el patrón de la línea 21 de `LessonEditorPage.test.tsx`. Y si se
+retira el modal de éxito, esos mismos specs E2E dejan de necesitar el clic en «Aceptar».

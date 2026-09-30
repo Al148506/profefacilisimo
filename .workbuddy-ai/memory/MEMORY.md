@@ -189,7 +189,12 @@ ramas `--contract` / `--backend` no contienen trabajo real. Consecuencias:
 
 ## Lote de correcciones de diseño (`design-fixes`) — reglas del usuario (2026-09-25)
 
-Cada corrección va en **su propia rama hija de `design-fixes`**. Reglas vigentes del lote:
+**⚠️ Lote CERRADO y entregado en `main`.** Las reglas de abajo eran **solo para ese lote** (prioridad:
+velocidad de iteración sobre cobertura). **Ya no aplican**: el trabajo posterior sí ejecuta la suite y
+sí repara tests — ver «Tests del wizard: deuda SALDADA» más abajo. Se conservan como referencia
+histórica de por qué quedaron dos `docs/*-affected-tests.md`.
+
+Cada corrección iba en **su propia rama hija de `design-fixes`**. Reglas que rigieron el lote:
 
 - **No crear ni actualizar tests unitarios ni E2E. No ejecutar la suite completa. No validaciones
   manuales en navegador.**
@@ -200,14 +205,61 @@ Cada corrección va en **su propia rama hija de `design-fixes`**. Reglas vigente
 
 Cambios entregados en el lote (referencia):
 
-- **Wizard de 2 pasos** (`feat/crear-clase-wizard-2-pasos`): el paso vive en `useState` (una recarga
-  vuelve al paso 1, no va en la URL). `carriedStep` (variable de módulo) sobrevive al remount al crear una
-  clase. Avance bloqueado con `form.trigger()`. El contrato de guardado no cambia.
-- **SweetAlert2** (`notifications.ts` centraliza las alertas): **trampa de tipado** —
-  `Parameters<typeof Swal.fire>[0]` resuelve a la sobrecarga de `string` → TS2698/TS2345; importar
-  `SweetAlertOptions` como tipo. Tema en `styles.css` (`.pf-alert`), no en `customClass`.
-  **`npm install` reformatea `package.json`/`package-lock.json` enteros**: revisar siempre el diff del lock.
-  La alerta no se cierra sola: puede interceptar clics en E2E.
-- **Botón secundario «Editar clase»** (`feat/boton-editar-clase`): `button.secondary` era selector de
-  **elemento**, un `<Link className="button secondary">` salía relleno → se generalizó a
-  `button.secondary, .button.secondary`. Primera aparición de un enlace secundario: ese es el patrón.
+- **Wizard de 2 pasos**: ✅ **integrado en `main` el 2026-09-29** (merge `34f7895`, `--no-ff`); la rama
+  `feat/crear-clase-wizard-2-pasos` ya se borró. El paso vive en `useState` (una recarga vuelve al paso 1,
+  no va en la URL). `carriedStep` (variable de módulo) sobrevive al remount al crear una clase. Avance
+  bloqueado con `form.trigger()`. El contrato de guardado no cambia. Ficheros en `main`:
+  `StepIndicator.tsx`, `editor-steps.ts`, `notifications.ts` y los dos `docs/*-affected-tests.md`.
+  ⚠️ **`AssignedStudents` (SPEC 04) debe seguir FUERA del `<form>` y fuera del condicional de paso** —
+  es el conflicto natural cada vez que se toque el `return` de `LessonEditorPage.tsx`. Los 2 tests
+  canario de `AssignedStudents` lo verifican.
+- **SweetAlert2** (`notifications.ts` centraliza las alertas): ✅ en `main` (`sweetalert2@^11.26.25`).
+  Trampa de tipado: `Parameters<typeof Swal.fire>[0]` resuelve a la sobrecarga de
+  `string` → TS2698/TS2345; importar `SweetAlertOptions` como tipo. Tema en `styles.css` (`.pf-alert`),
+  no en `customClass`. **`npm install` reformatea `package.json`/`package-lock.json` enteros**: revisar
+  siempre el diff del lock (en Windows npm poda metadatos `libc`/`license` de paquetes solo-Linux; no es
+  una pérdida de dependencias). La alerta no se cierra sola: puede interceptar clics en E2E.
+- **Botón secundario «Editar clase»** (`feat/boton-editar-clase`): ✅ sí está en `main` (`5200c57`).
+  `button.secondary` era selector de **elemento**, un `<Link className="button secondary">` salía
+  relleno → se generalizó a `button.secondary, .button.secondary`. Primera aparición de un enlace
+  secundario: ese es el patrón.
+
+## Tests del wizard: deuda SALDADA el 2026-09-29 (ya no hay nada en rojo)
+
+Esta sección decía antes que los tests desincronizados por el wizard eran deuda aceptada y que **no se
+arreglaran sin pedirlo**. Eso ya no es cierto: el usuario autorizó repararlos como primera fase del
+trabajo sobre el frontend, y se hizo. Estado verificado el 2026-09-29:
+
+- `frontend/src/lessons/LessonEditorPage.test.tsx` — **12/12 en verde**. Los tests recorren ahora el
+  wizard de verdad: clic en «Continuar» entre metadatos y actividades, etiqueta «Guardar clase».
+- `frontend/e2e/lessons.spec.ts` (2 tests) y `frontend/e2e/lesson-builder.spec.ts` (1) — en verde.
+- `frontend/e2e/students.spec.ts` (4) — **nunca estuvo afectado**; se listó aquí por error. Su helper
+  `createLesson()` crea la clase por API (`page.request.post('/api/lessons', …)`, línea 38), no por UI,
+  y sus clics en «Guardar» son del formulario de estudiante (`StudentFormPage.tsx:77`). Sin cambios.
+- `frontend/e2e/session.spec.ts` (1) — sin cambios.
+- Suite completa: `npx vitest run` → **20 archivos / 169 tests**.
+- Los **2 tests canario de `AssignedStudents`** siguen verdes y siguen siendo el contrato de SPEC 04:
+  no los rompas. Verifican que el componente quede fuera del `<form>` y fuera del condicional de paso.
+
+Detalle, causa raíz y evidencia en `docs/wizard-2-pasos-affected-tests.md` §7.
+
+### Tres reglas que quedan de esta reparación
+
+- **⚠️ No quitar las `key` de `.editor-actions` en `LessonEditorPage.tsx`.** Un ternario que renderiza un
+  `<button>` desnudo en la misma posición entre hermanos hace que React **reutilice el nodo DOM**. Si el
+  manejador del clic es `async` (`goToActivities()` hace `await form.trigger()`), React re-renderiza en un
+  microtask **durante** el despacho del clic y reescribe `type="button"` → `type="submit"` en el propio
+  nodo clicado; al terminar el manejador el navegador ejecuta su *activation behaviour* y **envía el
+  formulario solo**. Síntoma real: pulsar «Continuar» guardaba la clase y abría el modal de éxito.
+  Corregido con `<Fragment key="info">` / `<Fragment key="activities">`. «Atrás» no lo sufría porque
+  `goToInfo()` es síncrono. La regla general: **`key` en las ramas de un ternario cuyos botones cambian
+  de `type`**, o manejadores síncronos.
+- **Playwright, archivo por archivo.** Ejecutar varios specs seguidos agota el límite de `/api/auth`
+  (30 peticiones/min por IP, `backend/Api/Program.cs:62-68` aplicado al grupo en `:104`, que incluye
+  `/me`) y produce fallos que **no son regresiones** — le pasó a `session.spec.ts`.
+- **Cerrar la alerta de SweetAlert2 antes de cualquier `getByRole`.** Mientras el diálogo está abierto,
+  SweetAlert2 pone `aria-hidden="true"` en todos los demás hijos de `<body>` y Playwright
+  (`includeHidden: false`) no encuentra nada por rol en toda la app. `getByText` y `selectOption` sí
+  funcionan: la visibilidad CSS no cambia. Si algún día se retira el modal de guardado exitoso, los
+  clics en «Aceptar» de los specs deben quitarse a la vez.
+

@@ -55,17 +55,27 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   await page.getByLabel('Contraseña').fill(password);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
   await page.getByRole('link', { name: 'Crear clase', exact: true }).click();
-  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  // The first step never sends: «Continuar» refuses to advance and reveals the same three messages.
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByText('Este campo es obligatorio.')).toHaveCount(3);
   await page.getByLabel('Título', { exact: true }).fill(' Clase nueva ');
   await page.getByLabel('Nivel', { exact: true }).selectOption('B2');
   await page.getByLabel('Tema', { exact: true }).fill('Viajes');
   await page.getByLabel('Objetivo', { exact: true }).fill('Hablar del pasado');
-  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
+  // The success alert stays open until it is dismissed, and while it is open SweetAlert2 marks every
+  // other child of <body> as `aria-hidden`, which hides the whole editor from role queries. So the
+  // alert is closed before anything underneath it is asserted on.
+  await page.getByRole('button', { name: 'Aceptar' }).click();
   await expect(page.getByRole('heading', { name: 'Editar clase' })).toBeVisible();
+  // Creating lands on the activities step, so the metadata is read after going back to the first one.
+  await page.getByRole('button', { name: 'Atrás', exact: true }).click();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Clase nueva');
   await page.getByLabel('Título', { exact: true }).fill('Clase editada');
-  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
+  await page.getByRole('button', { name: 'Aceptar' }).click();
   await expect(page.getByRole('status')).toHaveText('Clase guardada.');
   await page.reload();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Clase editada');
@@ -101,7 +111,9 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   await expect(page.getByLabel('Tema', { exact: true })).toHaveValue('Viajes');
   await expect(page.getByLabel('Objetivo', { exact: true })).toHaveValue('Hablar del pasado');
   await page.getByLabel('Título', { exact: true }).fill('Copia independiente');
-  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
+  await page.getByRole('button', { name: 'Aceptar' }).click();
   await expect(page.getByRole('status')).toHaveText('Clase guardada.');
   await page.getByRole('button', { name: 'Volver a Mis clases' }).click();
   await expect(page.getByRole('heading', { name: 'Clase editada', exact: true })).toBeVisible();
