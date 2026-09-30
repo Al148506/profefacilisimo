@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
@@ -77,6 +77,7 @@ function revalidate(errors: DraftErrors, activity: ActivityDraft): DraftErrors {
 function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetails }) {
   const navigate = useNavigate();
   const client = useQueryClient();
+  const bypassBlocker = useRef(false);
   const form = useForm<LessonValues>({
     resolver: zodResolver(lessonSchema),
     defaultValues: initial
@@ -114,7 +115,7 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       setSelectedKey(canonical[index]?.key ?? null);
       client.setQueryData(lessonDetailKey(userId, saved.id), saved);
       void client.invalidateQueries({ queryKey: ['lessons', userId] });
-      if (!initial) { carriedStep = step; navigate('/lessons/' + saved.id + '/edit', { replace: true }); }
+      if (!initial) { carriedStep = step; bypassBlocker.current = true; navigate('/lessons/' + saved.id + '/edit', { replace: true }); }
       // The alert is a complement: it fires after the server confirmed and the state is already
       // settled, so it cannot interfere with the save or with the navigation above.
       void notifyLessonSaved();
@@ -129,23 +130,22 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
 
   const dirty = form.formState.isDirty || activitiesDirty;
   const saving = mutation.isPending;
+  const blocker = useBlocker(() => !bypassBlocker.current && (dirty || saving));
 
   useEffect(() => {
     const unload = (event: BeforeUnloadEvent) => { if (dirty || saving) { event.preventDefault(); event.returnValue = ''; } };
-    // The header brand is the other controlled navigation link available from this editor.
-    const brand = document.querySelector('a.brand');
-    const leave = (event: Event) => {
-      if (saving || (dirty && !window.confirm('Tienes cambios sin guardar. ¿Quieres descartarlos?'))) {
-        event.preventDefault(); event.stopPropagation();
-      }
-    };
     window.addEventListener('beforeunload', unload);
-    brand?.addEventListener('click', leave, true);
-    return () => { window.removeEventListener('beforeunload', unload); brand?.removeEventListener('click', leave, true); };
+    return () => { window.removeEventListener('beforeunload', unload); };
   }, [dirty, saving]);
 
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (!saving && window.confirm('Tienes cambios sin guardar. ¿Quieres descartarlos?')) blocker.proceed();
+    else blocker.reset();
+  }, [blocker, saving]);
+
   function back() {
-    if (!dirty || window.confirm('Tienes cambios sin guardar. ¿Quieres descartarlos?')) navigate('/');
+    navigate('/');
   }
   /**
    * Moves to the activities step, but only once the metadata is valid. The three messages the form

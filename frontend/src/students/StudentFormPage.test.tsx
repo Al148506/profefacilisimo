@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, Route, RouterProvider, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import StudentFormPage from './StudentFormPage';
 import { getStudent, saveStudent } from './student-api';
@@ -26,13 +26,16 @@ const details: StudentDetails = {
 
 function page(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>
-    <Routes>
+  function TestRoutes() {
+    return <Routes>
+      <Route path="/students" element={<p>Listado</p>} />
       <Route path="/students/new" element={<StudentFormPage />} />
       <Route path="/students/:id/edit" element={<StudentFormPage />} />
       <Route path="/students/:id" element={<p>Ficha</p>} />
-    </Routes>
-  </MemoryRouter></QueryClientProvider>);
+    </Routes>;
+  }
+  const router = createMemoryRouter([{ path: '*', element: <TestRoutes /> }], { initialEntries: [path] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
   return client;
 }
 

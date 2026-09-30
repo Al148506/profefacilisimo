@@ -1,7 +1,8 @@
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { emptyStudentValues, studentSchema, studentValuesFrom, toSaveStudentValues, type StudentFormValues, type StudentValues } from './student-schema';
 import { StudentSaveError, getStudent, saveStudent, studentDetailKey, type StudentDetails } from './student-api';
@@ -12,6 +13,7 @@ const SERVER_FIELDS = ['name', 'level', 'email', 'nativeLanguage', 'interests', 
 function StudentForm({ userId, initial }: { userId: string; initial?: StudentDetails }) {
   const navigate = useNavigate();
   const client = useQueryClient();
+  const bypassBlocker = useRef(false);
   const form = useForm<StudentFormValues, unknown, StudentValues>({
     resolver: zodResolver(studentSchema),
     defaultValues: initial ? studentValuesFrom(initial) : emptyStudentValues(),
@@ -23,7 +25,7 @@ function StudentForm({ userId, initial }: { userId: string; initial?: StudentDet
       form.reset(studentValuesFrom(saved));
       client.setQueryData(studentDetailKey(userId, saved.id), saved);
       void client.invalidateQueries({ queryKey: ['students', userId] });
-      if (!initial) navigate('/students/' + saved.id, { replace: true });
+      if (!initial) { bypassBlocker.current = true; navigate('/students/' + saved.id, { replace: true }); }
     },
     onError: (error) => {
       // The form is kept exactly as it is: a rejected save never discards what was typed.
@@ -36,9 +38,22 @@ function StudentForm({ userId, initial }: { userId: string; initial?: StudentDet
   });
   const saving = mutation.isPending;
   const dirty = form.formState.isDirty;
+  const blocker = useBlocker(() => !bypassBlocker.current && (dirty || saving));
+
+  useEffect(() => {
+    const unload = (event: BeforeUnloadEvent) => { if (dirty || saving) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', unload);
+    return () => { window.removeEventListener('beforeunload', unload); };
+  }, [dirty, saving]);
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    if (!saving && window.confirm('Tienes cambios sin guardar. ¿Quieres descartarlos?')) blocker.proceed();
+    else blocker.reset();
+  }, [blocker, saving]);
 
   function back() {
-    if (!dirty || window.confirm('Tienes cambios sin guardar. ¿Quieres descartarlos?')) navigate('/students');
+    navigate('/students');
   }
 
   return <section className="card student-form" data-testid="student-form">

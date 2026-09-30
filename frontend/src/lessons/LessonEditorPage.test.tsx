@@ -1,7 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes, Link } from 'react-router-dom';
+import { createMemoryRouter, Link, Route, RouterProvider, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import LessonEditorPage from './LessonEditorPage';
 import { getLesson, saveLesson, lessonDetailKey, LessonSaveError, type LessonDetails } from './lesson-api';
@@ -23,10 +23,12 @@ const detail: LessonDetails = { id: 'l1', title: 'Original', level: 'B1', topic:
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(getLesson).mockResolvedValue(detail); });
 function page(path = '/lessons/l1/edit') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>
-    <Link className="brand" to="/">Inicio</Link>
-    <Routes><Route path="/" element={<h1>Listado</h1>} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Routes>
-  </MemoryRouter></QueryClientProvider>);
+  function TestRoutes() {
+    return <><Link className="brand" to="/">Inicio</Link>
+      <Routes><Route path="/" element={<h1>Listado</h1>} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Routes></>;
+  }
+  const router = createMemoryRouter([{ path: '*', element: <TestRoutes /> }], { initialEntries: [path] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
   return client;
 }
 it('validates required fields without sending and schema enforces limits and levels', async () => {
