@@ -4,12 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 vi.mock('./auth', () => ({
-  useAuth: () => ({ user: null, loading: false, error: null }),
+  useAuth: vi.fn(() => ({ user: null, loading: false, error: null })),
   initializeAuth: vi.fn(), retryInitialization: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn(), getCurrentUser: vi.fn(),
 }));
 import App from './App';
-import { login } from './auth';
-beforeEach(() => vi.clearAllMocks());
+import { login, logout, useAuth } from './auth';
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(useAuth).mockReturnValue({ user: null, loading: false, error: null });
+});
 function page(path: string) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}><MemoryRouter initialEntries={[path]}><App /></MemoryRouter></QueryClientProvider>);
 }

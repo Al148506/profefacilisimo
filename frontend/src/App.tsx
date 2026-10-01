@@ -7,15 +7,25 @@ import StudentProfilePage from './students/StudentProfilePage';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
-import { initializeAuth, login, register, retryInitialization, useAuth } from './auth';
+import { initializeAuth, login, logout, register, retryInitialization, useAuth, type User } from './auth';
 import LessonsPage from './lessons/LessonsPage';
 import { loginSchema, registerSchema, type Credentials } from './validation';
 
 function ProtectedRoute() {
   const { user } = useAuth();
   return user ? <Outlet /> : <Navigate to="/login" replace />;
+}
+
+function SessionBar({ user }: { user: User }) {
+  const client = useQueryClient();
+  const signOut = useMutation({ mutationFn: logout, retry: false, onSuccess: () => client.clear() });
+  return <div className="session-bar">
+    <p>Sesión iniciada como <strong>{user.email}</strong>.</p>
+    {signOut.isError && <p role="alert" className="error">No se pudo cerrar la sesión en el servidor. Vuelve a intentarlo.</p>}
+    <button className="secondary" onClick={() => signOut.mutate()} disabled={signOut.isPending}>{signOut.isPending ? 'Cerrando…' : 'Cerrar sesión'}</button>
+  </div>;
 }
 
 function AuthPage({ registering = false }: { registering?: boolean }) {
@@ -67,9 +77,9 @@ function StudentsDashboard({ trash = false }: { trash?: boolean }) {
 }
 
 export default function App() {
-  const { loading, error } = useAuth();
+  const { user, loading, error } = useAuth();
   useEffect(() => { void initializeAuth(); }, []);
-  return <><header><Link to="/" className="brand"><span aria-hidden="true">pf.</span> Profe Facilísimo</Link><span className="header-note">Menos preparación. Más conversación.</span></header>
+  return <><header><Link to="/" className="brand"><span aria-hidden="true">pf.</span> Profe Facilísimo</Link><span className="header-note">Menos preparación. Más conversación.</span>{user && <SessionBar user={user} />}</header>
     <main>{loading ? <p role="status">Preparando tu espacio…</p> : error ? <section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><button onClick={() => void retryInitialization()}>Reintentar</button></section> : <Routes>
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" registering />} />

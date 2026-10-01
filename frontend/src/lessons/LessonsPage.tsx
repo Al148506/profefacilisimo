@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getCurrentUser, logout, type User } from '../auth';
+import type { User } from '../auth';
 import { transitionLesson, duplicateLesson, lessonDetailKey, lessonListKey, listLessons, type LessonFilters, type LessonLevel } from './lesson-api';
 import { formatLessonDuration } from './lesson-duration';
 
@@ -24,8 +24,6 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
     queryFn: ({ signal }) => listLessons(filters, signal, trash ? 'trash' : 'active'),
     retry: false,
   });
-  const profile = useQuery({ queryKey: ['me', user.id], queryFn: getCurrentUser, retry: false });
-  const signOut = useMutation({ mutationFn: logout, retry: false, onSuccess: () => client.clear() });
   const transition = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'trash' | 'restore' | 'delete' }) => transitionLesson(id, action),
     retry: false,
@@ -97,14 +95,6 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
               {transition.isPending && transition.variables.id === lesson.id && <span role="status">Procesando…</span>}
               </div></li>)}</ul>}
       </>}
-    </div>
-    <div className="lesson-session">
-      <p>Sesión iniciada como <strong>{user.email}</strong>.</p>
-      {profile.isPending && <p role="status">Verificando tu cuenta…</p>}
-      {profile.isError && <p role="alert" className="error">{profile.error.message} <button onClick={() => void profile.refetch()}>Reintentar cuenta</button></p>}
-      {profile.isSuccess && <p className="status">Cuenta verificada con la API</p>}
-      {signOut.isError && <p role="alert" className="error">No se pudo cerrar la sesión en el servidor. Vuelve a intentarlo.</p>}
-      <button className="secondary" onClick={() => signOut.mutate()} disabled={signOut.isPending}>{signOut.isPending ? 'Cerrando…' : 'Cerrar sesión'}</button>
     </div>
   </section>;
 }

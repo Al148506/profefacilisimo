@@ -237,4 +237,7 @@ button.danger { background: #8c3033; border-color: #8c3033; }
 }
 
 .student-form { width: min(100%, 880px); }
+.session-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 14px; margin-left: auto; font-size: 13px; }
+.session-bar p { margin: 0; }
+.session-bar button { padding: 10px 14px; font-size: 13px; }
 
