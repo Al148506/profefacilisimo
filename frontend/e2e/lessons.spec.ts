@@ -75,8 +75,8 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   await page.getByLabel('Título', { exact: true }).fill('Clase editada');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
+  await expect(page.getByText('Clase guardada correctamente')).toBeVisible();
   await page.getByRole('button', { name: 'Aceptar' }).click();
-  await expect(page.getByRole('status')).toHaveText('Clase guardada.');
   await page.reload();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Clase editada');
   await expect(page.getByLabel('Nivel', { exact: true })).toHaveValue('B2');
@@ -113,8 +113,8 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   await page.getByLabel('Título', { exact: true }).fill('Copia independiente');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
+  await expect(page.getByText('Clase guardada correctamente')).toBeVisible();
   await page.getByRole('button', { name: 'Aceptar' }).click();
-  await expect(page.getByRole('status')).toHaveText('Clase guardada.');
   await page.getByRole('button', { name: 'Volver a Mis clases' }).click();
   await expect(page.getByRole('heading', { name: 'Clase editada', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Copia independiente', exact: true })).toBeVisible();

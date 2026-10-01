@@ -157,6 +157,7 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
         </p>
       </div>
       <div className="lesson-player-tools">
+        <Link className="secondary" to="/">Volver a Mis clases</Link>
         {fullscreenSupported && <button type="button" className="secondary" data-testid="player-fullscreen"
           aria-pressed={fullscreen} onClick={toggleFullscreen}>{fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}</button>}
         <Link data-testid="player-edit" to={'/lessons/' + lesson.id + '/edit'}>Editar</Link>

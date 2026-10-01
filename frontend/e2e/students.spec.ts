@@ -62,6 +62,8 @@ test('create a student, see it listed and open its profile', async ({ page }) =>
   await page.getByLabel('Correo').fill('alba@example.com');
   await page.getByLabel('Intereses').fill('Ajedrez y cine');
   await page.getByRole('button', { name: 'Guardar' }).click();
+  await expect(page.getByText('Estudiante guardado')).toBeVisible();
+  await page.getByRole('button', { name: 'Aceptar' }).click();
 
   // Saving a new student opens its profile.
   await expect(page.getByRole('heading', { name })).toBeVisible();
@@ -86,6 +88,7 @@ test('assign from the profile and from the lesson editor, then unassign from bot
   const name = 'Bruno ' + Date.now();
   await page.getByLabel('Nombre', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Aceptar' }).click();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 
   // From the profile: the picker offers the active lesson and assigning keeps us on the profile.
@@ -123,6 +126,7 @@ test('trash a student, restore it, keep its assignments, and delete it definitiv
   const name = 'Carla ' + Date.now();
   await page.getByLabel('Nombre', { exact: true }).fill(name);
   await page.getByRole('button', { name: 'Guardar' }).click();
+  await page.getByRole('button', { name: 'Aceptar' }).click();
   await page.getByLabel('Asignar clase').selectOption({ label: lessonTitle + ' · B1' });
   await expect(page.getByRole('heading', { name: lessonTitle })).toBeVisible();
 
@@ -177,6 +181,7 @@ test('filter the listing by name and level, and clear the filters', async ({ pag
     await page.getByLabel('Nombre', { exact: true }).fill(name);
     await page.getByLabel('Nivel', { exact: true }).selectOption(level);
     await page.getByRole('button', { name: 'Guardar' }).click();
+    await page.getByRole('button', { name: 'Aceptar' }).click();
     await page.getByRole('link', { name: 'Volver a Mis estudiantes' }).first().click();
   }
   await expect(page.getByRole('listitem')).toHaveCount(2);

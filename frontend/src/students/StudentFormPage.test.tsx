@@ -7,6 +7,7 @@ import StudentFormPage from './StudentFormPage';
 import { getStudent, saveStudent } from './student-api';
 import type { StudentDetails } from './student-api';
 import { useAuth } from '../auth';
+import { notifyStudentSaved } from '../notifications';
 
 vi.mock('./student-api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./student-api')>()),
@@ -16,6 +17,9 @@ vi.mock('../auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth')>()),
   useAuth: vi.fn(),
 }));
+// SweetAlert2 mounts outside every React root and marks the app `aria-hidden` while open, so the
+// alerts are stubbed here exactly as in the editor suite: the test checks that saving fired one.
+vi.mock('../notifications', () => ({ notifyStudentSaved: vi.fn() }));
 
 const details: StudentDetails = {
   id: 's1', name: 'Alba', level: 'B1', interests: 'Ajedrez', assignedLessonCount: 0,
@@ -54,6 +58,8 @@ it('creates a student, sending nulls for the untouched optionals', async () => {
   await waitFor(() => expect(saveStudent).toHaveBeenCalledWith(
     { name: 'Alba', level: 'B1', email: null, nativeLanguage: null, interests: null, goals: null, notes: null },
     undefined));
+  // One channel per save: the success alert is the confirmation the inline paragraph used to be.
+  await waitFor(() => expect(notifyStudentSaved).toHaveBeenCalledTimes(1));
 });
 
 it('loads the current profile, edits a field and writes only on confirm', async () => {

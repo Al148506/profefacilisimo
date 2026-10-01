@@ -132,8 +132,10 @@ it('encodes both Ids when removing an assignment and tolerates a missing pair as
 });
 
 it('explains a 400 assignment when the target is in the trash', async () => {
+  // The server answers with ValidationProblem: `errors` is an object keyed by field, never an array.
   vi.mocked(authenticatedFetch).mockResolvedValueOnce(new Response(JSON.stringify({
-    detail: 'El estudiante está en papelera.',
+    title: 'One or more validation errors occurred.',
+    errors: { assignment: ['No puedes asignar un estudiante o una clase que está en la papelera.'] },
   }), { status: 400 }));
-  await expect(assignStudentToLesson('l1', 's2')).rejects.toThrow('El estudiante está en papelera.');
+  await expect(assignStudentToLesson('l1', 's2')).rejects.toThrow('No puedes asignar un estudiante o una clase que está en la papelera.');
 });

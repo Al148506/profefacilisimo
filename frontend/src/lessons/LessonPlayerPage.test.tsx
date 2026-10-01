@@ -374,6 +374,8 @@ it('reaches the controls with Tab and activates them with Enter and Space', asyn
   page('/lessons/l1/play?actividad=2');
   await screen.findByTestId('player-activity-title');
   await userEvent.tab();
+  expect(screen.getByRole('link', { name: 'Volver a Mis clases' })).toHaveFocus();
+  await userEvent.tab();
   expect(screen.getByTestId('player-edit')).toHaveFocus();
   await userEvent.tab();
   expect(screen.getByTestId('player-previous')).toHaveFocus();

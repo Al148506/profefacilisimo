@@ -38,7 +38,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
     <p className="eyebrow">Tus estudiantes</p>
     <h1>{trash ? 'Papelera de estudiantes' : 'Mis estudiantes'}</h1>
     <nav className="students-navigation">{trash ? <Link to="/students">Volver a Mis estudiantes</Link> : <>
-      <Link className="button" to="/students/new">Crear estudiante</Link><Link to="/students/trash">Papelera</Link>
+      <Link className="button" to="/students/new">Crear estudiante</Link><Link to="/students/trash">Papelera</Link><Link to="/">Mis clases</Link>
     </>}</nav>
     <p>{trash
       ? 'Restaura tus estudiantes o elimínalos definitivamente.'

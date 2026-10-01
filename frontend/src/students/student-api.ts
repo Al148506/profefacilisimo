@@ -129,8 +129,8 @@ async function assignmentResponse(response: Response, notFound: string): Promise
       let message = '';
       try {
         const problem = await response.json();
-        if (typeof problem?.detail === 'string') message = problem.detail;
-        if (Array.isArray(problem?.errors)) message = problem.errors.flat().join(' ');
+        if (problem?.errors) message = Object.values(problem.errors as Record<string, string[]>).flat().join(' ');
+        else if (typeof problem?.detail === 'string') message = problem.detail;
       } catch { /* Responses may not contain JSON. */ }
       throw new Error(message || 'No pudimos completar la asignación. Vuelve a intentarlo.');
     }

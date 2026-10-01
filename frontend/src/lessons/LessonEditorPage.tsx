@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
@@ -252,7 +252,8 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       {mutation.isError && <p role="alert" className="error">{mutation.error instanceof TypeError
         ? 'No pudimos conectar. Conservamos tus cambios; comprueba si se guardaron antes de reintentar.'
         : mutation.error.message}</p>}
-      {mutation.isSuccess && !dirty && <p role="status">Clase guardada.</p>}
+      {/* The saved confirmation is the `notifyLessonSaved` alert above: this screen deliberately has
+          no second success channel, so the teacher hears the same thing once per save. */}
       {/* Keyed so the two bars never share a DOM node: «Continuar» and «Guardar clase» sit in the same
           position, and reusing the node would rewrite its type to submit while the click that changed
           the step is still being dispatched, so the browser would then submit the form on its own. */}
@@ -283,12 +284,11 @@ export default function LessonEditorPage() {
     queryFn: ({ signal }) => getLesson(id!, signal),
     enabled: !!(id && user), retry: false,
   });
-  const navigate = useNavigate();
   if (!user) return null;
   if (!id) return <LessonForm key={user.id + '-new'} userId={user.id} />;
   if (!query.data) return <section className="card">
-    {query.isPending ? <p role="status">Cargando clase…</p> : <div role="alert"><p>{query.error?.message}</p><button disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button></div>}
-    <button className="secondary" onClick={() => navigate('/')}>Volver a Mis clases</button>
+    {query.isPending ? <p role="status">Cargando clase…</p> : <div role="alert" className="error"><p>{query.error?.message}</p><button disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button></div>}
+    <Link className="button secondary" to="/">Volver a Mis clases</Link>
   </section>;
   return <LessonForm key={user.id + '-' + id} userId={user.id} initial={query.data} />;
 }

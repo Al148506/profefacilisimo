@@ -112,8 +112,7 @@ it('disables saving controls and clears dirty state only after success', async (
   expect(screen.getByRole('button', { name: 'Agregar actividad' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Volver a Mis clases' })).toBeDisabled();
   resolve({ ...detail, title: 'Original editada' });
-  expect(await screen.findByRole('status')).toHaveTextContent('Clase guardada.');
-  expect(notifyLessonSaved).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(notifyLessonSaved).toHaveBeenCalledTimes(1));
   // Nothing is pending any more, so leaving is not questioned.
   const confirm = vi.spyOn(window, 'confirm');
   await userEvent.click(screen.getByRole('button', { name: 'Volver a Mis clases' }));
@@ -211,7 +210,8 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
   await userEvent.type(screen.getByLabelText('Duración (minutos)'), '20');
   expect(screen.getByText('Duración total:')).toHaveTextContent('30 min');
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
-  expect(await screen.findByRole('status')).toHaveTextContent('Clase guardada.');
+  // The alert is the only success channel now: the second save reopens it, and the draft is clean.
+  await waitFor(() => expect(notifyLessonSaved).toHaveBeenCalledTimes(2));
   // The local keys were replaced by the returned Ids, so the next save updates instead of inserting.
   const second = vi.mocked(saveLesson).mock.calls[1];
   expect(second[1]).toBe('l1');

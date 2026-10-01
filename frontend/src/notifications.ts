@@ -33,6 +33,16 @@ export function notifyLessonSaved(): Promise<unknown> {
   });
 }
 
+/** The student was created or updated and the server confirmed it. */
+export function notifyStudentSaved(): Promise<unknown> {
+  return themed({
+    icon: 'success',
+    title: 'Estudiante guardado',
+    text: 'Los cambios se han guardado exitosamente.',
+    confirmButtonText: 'Aceptar',
+  });
+}
+
 /**
  * The save was rejected. The API message wins when there is one; the fallback covers a network
  * failure, where there is no server message at all.

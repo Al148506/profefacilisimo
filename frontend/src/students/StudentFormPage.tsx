@@ -2,8 +2,9 @@ import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth';
+import { notifyStudentSaved } from '../notifications';
 import { emptyStudentValues, studentSchema, studentValuesFrom, toSaveStudentValues, type StudentFormValues, type StudentValues } from './student-schema';
 import { StudentSaveError, getStudent, saveStudent, studentDetailKey, type StudentDetails } from './student-api';
 
@@ -25,6 +26,7 @@ function StudentForm({ userId, initial }: { userId: string; initial?: StudentDet
       form.reset(studentValuesFrom(saved));
       client.setQueryData(studentDetailKey(userId, saved.id), saved);
       void client.invalidateQueries({ queryKey: ['students', userId] });
+      void notifyStudentSaved();
       if (!initial) { bypassBlocker.current = true; navigate('/students/' + saved.id, { replace: true }); }
     },
     onError: (error) => {
@@ -88,7 +90,8 @@ function StudentForm({ userId, initial }: { userId: string; initial?: StudentDet
       {mutation.isError && <p role="alert" className="error">{mutation.error instanceof TypeError
         ? 'No pudimos conectar. Conservamos tus cambios; comprueba si se guardaron antes de reintentar.'
         : mutation.error.message}</p>}
-      {mutation.isSuccess && !dirty && <p role="status">Estudiante guardado.</p>}
+      {/* The saved confirmation is the `notifyStudentSaved` alert: one channel per save, the same
+          criterion the editor applies. */}
       <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
     </form>
     <button className="secondary" disabled={saving} onClick={back}>Volver a Mis estudiantes</button>
@@ -103,12 +106,11 @@ export default function StudentFormPage() {
     queryFn: ({ signal }) => getStudent(id!, signal),
     enabled: !!(id && user), retry: false,
   });
-  const navigate = useNavigate();
   if (!user) return null;
   if (!id) return <StudentForm key={user.id + '-new'} userId={user.id} />;
   if (!query.data) return <section className="card">
-    {query.isPending ? <p role="status">Cargando estudiante…</p> : <div role="alert"><p>{query.error?.message}</p><button disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button></div>}
-    <button className="secondary" onClick={() => navigate('/students')}>Volver a Mis estudiantes</button>
+    {query.isPending ? <p role="status">Cargando estudiante…</p> : <div role="alert" className="error"><p>{query.error?.message}</p><button disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button></div>}
+    <Link className="button secondary" to="/students">Volver a Mis estudiantes</Link>
   </section>;
   return <StudentForm key={user.id + '-' + id} userId={user.id} initial={query.data} />;
 }

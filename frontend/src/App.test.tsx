@@ -8,7 +8,7 @@ vi.mock('./auth', () => ({
   initializeAuth: vi.fn(), retryInitialization: vi.fn(), login: vi.fn(), register: vi.fn(), logout: vi.fn(), getCurrentUser: vi.fn(),
 }));
 import App from './App';
-import { login, logout, useAuth } from './auth';
+import { login, useAuth } from './auth';
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useAuth).mockReturnValue({ user: null, loading: false, error: null });
