@@ -4,21 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatLessonDuration } from '../lessons/lesson-duration';
 import { listLessons, type LessonListItem } from '../lessons/lesson-api';
 import { assignLessonToStudent, unassignLessonFromStudent, type StudentDetails } from './student-api';
+import { readErrorMessage } from './student-errors';
 
 const ACTIVE = 'active' as const;
-
-async function readErrorMessage(error: unknown, fallback: string): Promise<string> {
-  if (error instanceof Response) {
-    try {
-      const problem = await error.json();
-      if (Array.isArray(problem?.errors)) return problem.errors.join(' ');
-      if (typeof problem?.detail === 'string' && problem.detail) return problem.detail;
-      if (typeof problem?.title === 'string' && problem.title) return problem.title;
-    } catch { /* The body may not be JSON at all. */ }
-    return fallback;
-  }
-  return error instanceof Error ? error.message : fallback;
-}
 
 /** The lessons assigned to a student, read from the profile that already carries them. */
 export default function AssignedLessons({ student, userId }: { student: StudentDetails; userId: string }) {
@@ -47,7 +35,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
     onSuccess: async () => {
       await invalidate();
     },
-    onError: async (error) => setAssignFailure(await readErrorMessage(error, 'No pudimos asignar la clase. Vuelve a intentarlo.')),
+    onError: (error) => setAssignFailure(readErrorMessage(error, 'No pudimos asignar la clase. Vuelve a intentarlo.')),
   });
 
   const unassign = useMutation({
@@ -60,8 +48,8 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
     onSuccess: async () => {
       await invalidate();
     },
-    onError: async (error, { lessonId }) =>
-      setFailedUnassign({ lessonId, message: await readErrorMessage(error, 'No pudimos quitar la asignación. Vuelve a intentarlo.') }),
+    onError: (error, { lessonId }) =>
+      setFailedUnassign({ lessonId, message: readErrorMessage(error, 'No pudimos quitar la asignación. Vuelve a intentarlo.') }),
     onSettled: () => setPendingUnassign(null),
   });
 

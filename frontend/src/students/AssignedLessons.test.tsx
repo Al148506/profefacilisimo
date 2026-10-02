@@ -95,7 +95,7 @@ it('assigns the chosen lesson through the frozen transport', async () => {
 
 it('reports a rejected assignment and keeps the picker usable', async () => {
   page([], [candidate]);
-  vi.mocked(assignLessonToStudent).mockRejectedValue(new Response(JSON.stringify({ title: 'La clase está en papelera.' }), { status: 400 }));
+  vi.mocked(assignLessonToStudent).mockRejectedValue(new Error('La clase está en papelera.'));
   await screen.findByRole('option', { name: 'Futura · B1' });
   await userEvent.selectOptions(screen.getByLabelText('Asignar clase'), 'l4');
   expect(await screen.findByText('La clase está en papelera.')).toBeInTheDocument();

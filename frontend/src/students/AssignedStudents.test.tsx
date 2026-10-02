@@ -112,7 +112,7 @@ it('leaves the screen untouched and offers a retry when a network failure happen
 
 it('reports a rejected assignment and keeps the picker usable', async () => {
   page([], [carla]);
-  vi.mocked(assignStudentToLesson).mockRejectedValue(new Response(JSON.stringify({ title: 'El estudiante está en papelera.' }), { status: 400 }));
+  vi.mocked(assignStudentToLesson).mockRejectedValue(new Error('El estudiante está en papelera.'));
   await screen.findByRole('option', { name: 'Carla · B2' });
   await userEvent.selectOptions(screen.getByLabelText('Asignar estudiante'), 's3');
   expect(await screen.findByText('El estudiante está en papelera.')).toBeInTheDocument();
