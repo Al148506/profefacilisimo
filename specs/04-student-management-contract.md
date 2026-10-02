@@ -249,8 +249,12 @@ Los Flujos A y B las **leen**, nunca las escriben.
 | `student-profile`   | sección raíz de la ficha                              |
 | `assigned-lessons`  | sección de clases asignadas en la ficha               |
 | `assigned-students` | sección de estudiantes asignados en el editor         |
-| `student-picker`    | selector de asignación                                |
+| `student-picker`    | selector de asignación de estudiantes (editor)          |
+| `lesson-picker`     | selector de asignación de clases (ficha)                |
 | `trash-mark`        | marca «En papelera»                                   |
+
+> Enmienda (Ronda 2, P2-2): el picker de la ficha pasa de `student-picker` a `lesson-picker` para que
+> cada selector tenga un gancho único; `student-picker` queda solo para el editor.
 
 ---
 

@@ -59,9 +59,6 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
     <h2>Clases asignadas</h2>
     <p>Añade o quita clases sin salir de la ficha del estudiante.</p>
 
-    {assignFailure && <p role="alert" className="error">{assignFailure}
-      <button className="secondary" onClick={() => assign.variables && assign.mutate(assign.variables)}>Reintentar</button></p>}
-
     {candidatesQuery.isError && <div role="alert" className="error">
       <p>No pudimos cargar tus clases.</p>
       <button disabled={candidatesQuery.isFetching} onClick={() => void candidatesQuery.refetch()}>Reintentar clases</button>
@@ -71,7 +68,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
       ? <p className="assigned-lessons-empty">Este estudiante todavía no tiene clases asignadas.</p>
       : <ul className="lesson-list">
         {assigned.map((lesson) => <li key={lesson.id}>
-          <h3 className="assigned-lesson-title">{lesson.title}</h3>
+          <p className="assigned-lesson-title">{lesson.title}</p>
           <span className="level-badge">{lesson.level}</span>
           <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>
           {lesson.inTrash && <span className="trash-mark" data-testid="trash-mark">En papelera</span>}
@@ -87,7 +84,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
         </li>)}
       </ul>}
 
-    <div className="student-picker" data-testid="student-picker">
+    <div className="student-picker" data-testid="lesson-picker">
       <label htmlFor="assigned-lesson-picker">Asignar clase</label>
       {candidatesQuery.isSuccess && candidates.length === 0
         ? <p>No tienes clases activas que asignar. <Link to="/lessons/new">Crear clase</Link></p>
@@ -98,6 +95,8 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
             {candidates.map((lesson: LessonListItem) => <option key={lesson.id} value={lesson.id}>{lesson.title} · {lesson.level}</option>)}
           </select>
           {assign.isPending && <span role="status">Asignando…</span>}
+          {assignFailure && <span role="alert" className="error">{assignFailure}
+            <button className="secondary" onClick={() => assign.variables && assign.mutate(assign.variables)}>Reintentar</button></span>}
         </>}
     </div>
   </section>;
