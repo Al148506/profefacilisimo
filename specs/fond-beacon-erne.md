@@ -1,5 +1,7 @@
 # Análisis del frontend y plan de trabajo priorizado
 
+> **Estado:** Aprobado
+
 ## Contexto
 
 Se pidió una revisión a fondo del frontend de Profe Facilísimo para llevarlo a un estado **más limpio,
@@ -69,26 +71,13 @@ nueva:
 
 ## P0 — Crítico
 
-### P0-1 · Los mensajes de error del servidor al asignar nunca llegan al usuario — **ABIERTO**
+### P0-1 · Los mensajes de error del servidor al asignar nunca llegan al usuario — ✅ CERRADO
 
-- **Problema.** `assignmentResponse` intenta leer el cuerpo de un `400` así:
-  `if (typeof problem?.detail === 'string')` y `if (Array.isArray(problem?.errors))`. El backend responde
-  con `ValidationProblem` (`StudentEndpoints.cs:166-169`), donde `errors` es un **objeto**
-  `{ assignment: [...] }` y no existe `detail`. Ninguna de las dos ramas entra nunca, así que el
-  profesor siempre ve el genérico *"No pudimos completar la asignación. Vuelve a intentarlo."* en lugar
-  del motivo real (por ejemplo, que el estudiante está en la papelera).
-- **Dónde.** `frontend/src/students/student-api.ts:128-136`.
-- **Por qué merece la pena.** Es un defecto funcional confirmado contra el código del servidor, no una
-  opinión de estilo. Un mensaje genérico sobre una operación que el usuario no puede diagnosticar
-  produce reintentos inútiles. **Es el único defecto visible restante del nivel P0.**
-- **Cambio propuesto.** Aplicar el patrón que **ya existe en el mismo archivo** en `studentResponse:90`:
-  `Object.values(problem.errors as Record<string, string[]>).flat().join(' ')`. Ninguna cadena nueva,
-  ningún endpoint nuevo.
-- **Archivos.** `src/students/student-api.ts`.
-- **Complejidad.** Baja.
-- **Dependencias / riesgos.** Revisar si `student-api.test.ts` cubre esta rama con un cuerpo en forma
-  de array; si lo hace, ese test está validando una forma que el servidor nunca envía: corregirlo en el
-  mismo commit.
+- **Evidencia de cierre.** `assignmentResponse` (`student-api.ts:132`) lee ya el `ValidationProblem`
+  real con el patrón de `studentResponse:90`:
+  `Object.values(problem.errors as Record<string, string[]>).flat().join(' ')`. El test de la rama
+  `400` en `student-api.test.ts` usa `errors` como objeto, la forma que envía el servidor.
+
 
 ### P0-2 · Dos clases CSS se usan pero no existen — ✅ CERRADO
 
@@ -126,55 +115,35 @@ nueva:
   cuenta…'` / `'Cuenta verificada con la API'` ya no existen en `LessonsPage.tsx`. El email sobrevive,
   movido al encabezado con P1-1.
 
-### P1-3 · El reproductor no ofrece salida durante una actividad — **ABIERTO**
+### P1-3 · El reproductor no ofrece salida durante una actividad — ✅ CERRADO
 
-- **Problema.** La barra de herramientas de una actividad solo contiene «Pantalla completa» y un enlace
-  «Editar» (`LessonPlayerPage.tsx:160-162`). «Volver a Mis clases» aparece **únicamente** en la
-  pantalla de cierre (línea 135) y en la tarjeta 404 (línea 190). Un profesor a mitad de clase que
-  necesite salir no tiene control visible: o usa Atrás del navegador, o entra en «Editar» — una
-  fricción absurda justo durante la clase, y además «Editar» como única alternativa induce a entrar en
-  el editor sin querer.
-- **Cambio propuesto.** Añadir «Volver a Mis clases» a la barra de herramientas, reutilizando la cadena
-  y el estilo (`.button.secondary`) que ya existen en la pantalla de cierre. **Sin cadena nueva.**
-- **Archivos.** `src/lessons/LessonPlayerPage.tsx`.
-- **Complejidad.** Baja.
-- **Dependencias / riesgos.** `specs/03-reproductor-de-clases-parallel.md:88` (§C3) congela el
-  vocabulario de clases y testids del reproductor: hay que respetarlo letra a letra y comprobar que el
-  e2e del reproductor no cuente los botones de la barra. Verificar el ancho a 390px con un tercer control.
+- **Evidencia de cierre.** La barra de herramientas del reproductor incluye ya
+  `<Link className="secondary" to="/">Volver a Mis clases</Link>` (`LessonPlayerPage.tsx:160`),
+  reutilizando la cadena y el estilo de la pantalla de cierre. §C3 respetado: ningún testid nuevo,
+  ningún botón contado por el e2e (`LessonPlayerPage.test.tsx:92,316` cubren la salida).
 
 ### P1-4 · El formulario de estudiante no tenía confirmación de salida — ✅ CERRADO
 
 - **Evidencia de cierre.** `StudentFormPage.tsx:41-51` aplica el mismo mecanismo que P0-3: `useBlocker`
   + `beforeunload` + `window.confirm` con el texto congelado.
 
-### P1-5 · El editor duplica el feedback de guardado exitoso — **ABIERTO**
+### P1-5 · El editor duplica el feedback de guardado exitoso — ✅ CERRADO
 
-- **Problema.** `mutation.onSuccess` ejecuta `void notifyLessonSaved()` (`LessonEditorPage.tsx:121`),
-  un SweetAlert2, **y además** el editor pinta `<p role="status">Clase guardada.</p>` en línea
-  (línea 255): doble feedback para el mismo evento, en cada guardado.
-- **Decisión tomada (v2).** **Se conserva SweetAlert2** como canal de éxito — el `<p role="status">`
-  del editor es el que se retira. `notifyLessonSaveFailed` sigue intacto para el error.
-- **Cambio propuesto.**
-  1. Quitar el párrafo inline de éxito de `LessonEditorPage.tsx:255` (el modal ya anuncia lo mismo).
-  2. Alinear el área de estudiantes, que hoy solo tiene inline
-      (`StudentFormPage.tsx:91` «Estudiante guardado.»): añadir un `notifyStudentSaved` hermano de
-      `notifyLessonSaved` reutilizando esa cadena exacta, y retirar su inline. **Sin cadena nueva.**
-- **Archivos.** `src/lessons/LessonEditorPage.tsx`, `src/students/StudentFormPage.tsx`,
-  `src/notifications.ts`.
-- **Complejidad.** Baja.
-- **Dependencias / riesgos.** Comprobar qué tests/e2e afirman sobre `role="status"` tras guardar en el
-  editor y sustituir la aserción por la espera del `.pf-alert`. Nota de accesibilidad: el modal de
-  SweetAlert2 recibe foco y se anuncia; la retirada del inline no degrada lectores de pantalla.
+- **Evidencia de cierre.** Un solo canal por área: `notifyLessonSaved` sigue en el editor y el
+  `<p role="status">` inline fue retirado (comentario en `LessonEditorPage.tsx:255`); en estudiantes se
+  añadió `notifyStudentSaved` (`notifications.ts:37`) con la cadena exacta «Estudiante guardado.» y se
+  retiró su inline (comentario en `StudentFormPage.tsx:93`). Los tests esperan el canal de alerta
+  (`StudentFormPage.test.tsx:62`).
 
-### P1-6 · Asimetrías entre clases y estudiantes — **ABIERTO (dividido en dos tiers por decisión v3)**
+### P1-6 · Asimetrías entre clases y estudiantes — Tier A ✅ CERRADO · Tier B pendiente (Ronda 2, commit 5)
 
-**Tier A — inconsistencias claramente visibles (Ronda 1):**
+**Tier A — inconsistencias claramente visibles (Ronda 1) — cerrado:**
 
-| Aspecto | Clases (hoy) | Estudiantes (hoy) | Unificación |
-|---|---|---|---|
-| Bloque de error de carga | `<div role="alert">` **sin** `className="error"` (`LessonEditorPage.tsx:290`) | `<div role="alert" className="error">` (`StudentProfilePage.tsx:37`) | añadir `className="error"` al editor |
-| Botón de salida del error | `<button className="secondary">` | `<Link className="button secondary">` | `<Link className="button secondary">` en ambos |
-| Volver desde el listado | `/lessons` enlaza a `/students` | `/students` **no** enlaza a `/lessons` | enlace «Mis clases» en `StudentsPage` (cadena existente) |
+| Aspecto | Evidencia de cierre |
+|---|---|
+| Bloque de error de carga | `<div role="alert" className="error">` en el editor (`LessonEditorPage.tsx:290`), igual que la ficha |
+| Botón de salida del error | `<Link className="button secondary" to="/">Volver a Mis clases</Link>` en ambos (`LessonEditorPage.tsx:291`) |
+| Volver desde el listado | enlace «Mis clases» en `StudentsPage.tsx:41` (cadena existente, sin CTA nuevo) |
 
 **Tier B — diferidos a Ronda 2 (menor riesgo, no afectan al uso diario hoy):**
 
