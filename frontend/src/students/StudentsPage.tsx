@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from '../auth';
+import { LEVELS } from '../levels';
 import { listStudents, studentDetailKey, studentListKey, transitionStudent, type StudentFilters, type StudentLevel } from './student-api';
 
 /** A trashed student keeps no filters: the listing of the trash is a flat list, like the lesson one. */
@@ -50,7 +51,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
       <div><label htmlFor="student-level">Nivel</label>
         <select id="student-level" value={level} onChange={(event) => setLevel(event.target.value as StudentLevel | '')}>
           <option value="">Todos los niveles</option>
-          <option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+          {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
       </div>
       <button type="submit">Buscar</button>

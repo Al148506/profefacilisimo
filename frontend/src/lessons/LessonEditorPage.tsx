@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth';
+import { LEVELS } from '../levels';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
 import AssignedStudents from '../students/AssignedStudents';
@@ -223,7 +224,7 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
           <small className="error" id="title-error">{form.formState.errors.title?.message}</small>
           <label htmlFor="level">Nivel</label>
           <select id="level" {...form.register('level')} aria-invalid={!!form.formState.errors.level} aria-describedby="level-error">
-            <option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+            {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
           <small className="error" id="level-error">{form.formState.errors.level?.message}</small>
           <label htmlFor="topic">Tema</label>

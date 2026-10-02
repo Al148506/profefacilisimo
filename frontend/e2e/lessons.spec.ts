@@ -54,7 +54,7 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   await page.getByLabel('Correo electrónico').fill(email);
   await page.getByLabel('Contraseña').fill(password);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
-  await page.getByRole('link', { name: 'Crear clase', exact: true }).click();
+  await page.getByRole('navigation').getByRole('link', { name: 'Crear clase', exact: true }).click();
   // The first step never sends: «Continuar» refuses to advance and reveals the same three messages.
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByText('Este campo es obligatorio.')).toHaveCount(3);

@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -23,6 +23,9 @@ it('shows loading followed by initial empty state', async () => {
   expect(screen.getByText('Cargando tus clases…')).toBeInTheDocument();
   resolve([]);
   expect(await screen.findByText('Aún no tienes clases.')).toBeInTheDocument();
+  // Two links share the name now (nav + empty CTA): scope to the results region.
+  const live = document.querySelector('[aria-live="polite"]') as HTMLElement;
+  expect(within(live).getByRole('link', { name: 'Crear clase' })).toHaveAttribute('href', '/lessons/new');
 });
 it('shows title, level and topic in server order', async () => {
   vi.mocked(listLessons).mockResolvedValue([lesson, { ...lesson, id: 'l2', title: 'Segunda' }]);

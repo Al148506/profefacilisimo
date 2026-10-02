@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { LEVELS } from '../levels';
 import { useAuth } from '../auth';
 import { notifyStudentSaved } from '../notifications';
 import { emptyStudentValues, studentSchema, studentValuesFrom, toSaveStudentValues, type StudentFormValues, type StudentValues } from './student-schema';
@@ -68,7 +69,7 @@ function StudentForm({ userId, initial }: { userId: string; initial?: StudentDet
         <small className="error" id="student-name-error">{form.formState.errors.name?.message}</small>
         <label htmlFor="student-form-level">Nivel</label>
         <select id="student-form-level" {...form.register('level')} aria-invalid={!!form.formState.errors.level} aria-describedby="student-form-level-error">
-          <option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+          {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
         <small className="error" id="student-form-level-error">{form.formState.errors.level?.message}</small>
         <label htmlFor="student-email">Correo</label>
