@@ -86,6 +86,6 @@ export default function App() {
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" registering />} />
       <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/trash" element={<Dashboard trash />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /><Route path="/lessons/:id/play" element={<LessonPlayerPage />} /><Route path="/students" element={<StudentsDashboard />} /><Route path="/students/trash" element={<StudentsTrashPage />} /><Route path="/students/new" element={<StudentFormPage />} /><Route path="/students/:id" element={<StudentProfilePage />} /><Route path="/students/:id/edit" element={<StudentFormPage />} /></Route>
-      <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link to="/">Volver al inicio</Link></section>} />
+      <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link className="button" to="/">Volver al inicio</Link></section>} />
     </Routes></RouteErrorBoundary>}</main><footer>Un espacio para enseñar español, a tu manera.</footer></>;
 }
