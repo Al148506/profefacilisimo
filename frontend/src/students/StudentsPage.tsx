@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { User } from '../auth';
+import { LEVELS } from '../levels';
 import { listStudents, studentDetailKey, studentListKey, transitionStudent, type StudentFilters, type StudentLevel } from './student-api';
 
 /** A trashed student keeps no filters: the listing of the trash is a flat list, like the lesson one. */
@@ -38,7 +39,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
     <p className="eyebrow">Tus estudiantes</p>
     <h1>{trash ? 'Papelera de estudiantes' : 'Mis estudiantes'}</h1>
     <nav className="students-navigation">{trash ? <Link to="/students">Volver a Mis estudiantes</Link> : <>
-      <Link className="button" to="/students/new">Crear estudiante</Link><Link to="/students/trash">Papelera</Link>
+      <Link className="button" to="/students/new">Crear estudiante</Link><Link to="/students/trash">Papelera</Link><Link to="/">Mis clases</Link>
     </>}</nav>
     <p>{trash
       ? 'Restaura tus estudiantes o elimínalos definitivamente.'
@@ -50,7 +51,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
       <div><label htmlFor="student-level">Nivel</label>
         <select id="student-level" value={level} onChange={(event) => setLevel(event.target.value as StudentLevel | '')}>
           <option value="">Todos los niveles</option>
-          <option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+          {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
       </div>
       <button type="submit">Buscar</button>
@@ -68,7 +69,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
       {students.isSuccess && <>
         {students.isFetching && <p role="status">Actualizando estudiantes…</p>}
         {students.data.length === 0
-          ? <p className="student-list-empty">{trash
+          ? <p>{trash
             ? 'La papelera está vacía.'
             : filtered ? 'No hay estudiantes que coincidan con estos filtros.' : 'Aún no tienes estudiantes.'}</p>
           : <ul className="student-list">{students.data.map((student) =>

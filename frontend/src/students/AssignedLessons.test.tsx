@@ -44,7 +44,7 @@ beforeEach(() => vi.resetAllMocks());
 
 it('shows the title, the level and the duration of every assigned lesson', async () => {
   page([complete, incomplete]);
-  expect(await screen.findByRole('heading', { name: 'Repaso B1' })).toBeInTheDocument();
+  expect(await screen.findByText('Repaso B1', { exact: true })).toBeInTheDocument();
   expect(screen.getByText('45 min')).toBeInTheDocument();
   // A lesson with an activity still missing a duration is never given an invented total.
   expect(screen.getByText('Duración incompleta')).toBeInTheDocument();
@@ -95,7 +95,7 @@ it('assigns the chosen lesson through the frozen transport', async () => {
 
 it('reports a rejected assignment and keeps the picker usable', async () => {
   page([], [candidate]);
-  vi.mocked(assignLessonToStudent).mockRejectedValue(new Response(JSON.stringify({ title: 'La clase está en papelera.' }), { status: 400 }));
+  vi.mocked(assignLessonToStudent).mockRejectedValue(new Error('La clase está en papelera.'));
   await screen.findByRole('option', { name: 'Futura · B1' });
   await userEvent.selectOptions(screen.getByLabelText('Asignar clase'), 'l4');
   expect(await screen.findByText('La clase está en papelera.')).toBeInTheDocument();
@@ -106,7 +106,7 @@ it('leaves the row untouched and offers a retry when a network failure happens',
   vi.mocked(unassignLessonFromStudent).mockRejectedValue(new TypeError('Offline'));
   await userEvent.click(await screen.findByRole('button', { name: 'Quitar asignación de Repaso B1' }));
   // The lesson is still listed: the server never confirmed the removal.
-  expect(screen.getByRole('heading', { name: 'Repaso B1' })).toBeInTheDocument();
+  expect(screen.getByText('Repaso B1', { exact: true })).toBeInTheDocument();
   expect(await screen.findByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   expect(unassignLessonFromStudent).toHaveBeenCalledTimes(1);
 });

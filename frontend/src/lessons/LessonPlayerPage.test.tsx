@@ -105,11 +105,12 @@ it('keeps a failed load on the same screen and retries only when asked', async (
   expect(getLesson).toHaveBeenCalledTimes(2);
 });
 
-it('shows the empty state with the editor as its only way out and no controls at all', async () => {
+it('shows the empty state with the editor and back links and no controls at all', async () => {
   vi.mocked(getLesson).mockResolvedValue({ ...lesson, estimatedDuration: 0, activities: [] });
   page();
   expect(await screen.findByTestId('player-empty')).toHaveTextContent('Esta clase todavía no tiene actividades.');
   expect(screen.getByRole('link', { name: 'Editar la clase' })).toHaveAttribute('href', '/lessons/l1/edit');
+  expect(screen.getByRole('link', { name: 'Volver a Mis clases' })).toHaveAttribute('href', '/');
   expect(screen.queryByTestId('player-progress')).not.toBeInTheDocument();
   expect(screen.queryByTestId('player-previous')).not.toBeInTheDocument();
   expect(screen.queryByTestId('player-next')).not.toBeInTheDocument();
@@ -373,6 +374,8 @@ it('links Editar to the editor of this lesson', async () => {
 it('reaches the controls with Tab and activates them with Enter and Space', async () => {
   page('/lessons/l1/play?actividad=2');
   await screen.findByTestId('player-activity-title');
+  await userEvent.tab();
+  expect(screen.getByRole('link', { name: 'Volver a Mis clases' })).toHaveFocus();
   await userEvent.tab();
   expect(screen.getByTestId('player-edit')).toHaveFocus();
   await userEvent.tab();

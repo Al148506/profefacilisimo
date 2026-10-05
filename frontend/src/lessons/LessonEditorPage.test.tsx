@@ -1,11 +1,12 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes, Link } from 'react-router-dom';
+import { createMemoryRouter, Link, Route, RouterProvider, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import LessonEditorPage from './LessonEditorPage';
 import { getLesson, saveLesson, lessonDetailKey, LessonSaveError, type LessonDetails } from './lesson-api';
 import { lessonDraftSchema, lessonSchema } from './lesson-schema';
+import { notifyLessonSaved } from '../notifications';
 vi.mock('../auth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), getLesson: vi.fn(), saveLesson: vi.fn() }));
 // The integration phase mounts the assigned-students section inside the editor. This suite is about
@@ -14,19 +15,26 @@ vi.mock('../students/student-api', async (original) => ({
   ...await original<typeof import('../students/student-api')>(),
   listAssignedStudents: vi.fn(async () => []), listStudents: vi.fn(async () => []),
 }));
+// The alerts are SweetAlert2, which mounts its own container on <body>: outside every React root, so
+// the testing-library cleanup cannot reach it, and an open popup marks the app `aria-hidden` and
+// hides it from role queries. Stubbing them keeps this suite about the draft itself.
+vi.mock('../notifications', () => ({ notifyLessonSaved: vi.fn(), notifyLessonSaveFailed: vi.fn() }));
 const detail: LessonDetails = { id: 'l1', title: 'Original', level: 'B1', topic: 'Tema', objective: 'Objetivo', createdAt: '2026-09-17', updatedAt: '2026-09-17', deletedAt: null, estimatedDuration: 60, activities: [] };
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(getLesson).mockResolvedValue(detail); });
 function page(path = '/lessons/l1/edit') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>
-    <Link className="brand" to="/">Inicio</Link>
-    <Routes><Route path="/" element={<h1>Listado</h1>} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Routes>
-  </MemoryRouter></QueryClientProvider>);
+  function TestRoutes() {
+    return <><Link className="brand" to="/">Inicio</Link>
+      <Routes><Route path="/" element={<h1>Listado</h1>} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Routes></>;
+  }
+  const router = createMemoryRouter([{ path: '*', element: <TestRoutes /> }], { initialEntries: [path] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
   return client;
 }
 it('validates required fields without sending and schema enforces limits and levels', async () => {
   page('/lessons/new');
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  // The first step never sends: «Continuar» refuses to advance and reveals the same three messages.
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
   expect(await screen.findAllByText('Este campo es obligatorio.')).toHaveLength(3);
   expect(saveLesson).not.toHaveBeenCalled();
   for (const [field, value] of [['title', 'x'.repeat(201)], ['topic', 'x'.repeat(201)], ['objective', 'x'.repeat(2001)], ['level', 'B3'], ['title', '   ']]) {
@@ -41,7 +49,9 @@ it('creates using trimmed metadata and opens the saved editor', async () => {
   await userEvent.type(screen.getByLabelText('Tema'), ' Tema ');
   await userEvent.type(screen.getByLabelText('Objetivo'), ' Objetivo ');
   await userEvent.selectOptions(screen.getByLabelText('Nivel'), 'B1');
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  // Creating walks the whole wizard: «Continuar» reaches the activities, «Guardar clase» sends.
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
   expect(saveLesson).toHaveBeenCalledWith({ title: 'Nueva', level: 'B1', topic: 'Tema', objective: 'Objetivo', activities: [] }, undefined);
 });
@@ -78,22 +88,32 @@ it('retains dirty fields across refetch and failed save without automatic retry'
   client.setQueryData(lessonDetailKey('u1', 'l1'), { ...detail, title: 'Servidor' });
   expect(title).toHaveValue('Borrador');
   vi.mocked(saveLesson).mockRejectedValue(new Error('Error de guardado'));
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByText('Error de guardado')).toBeInTheDocument();
-  expect(title).toHaveValue('Borrador');
   expect(saveLesson).toHaveBeenCalledTimes(1);
+  // A failed save leaves the teacher on the step where it was pressed. Going back shows the draft
+  // they typed, not the value the refetch brought from the server: the field was unmounted while the
+  // activities step was showing, so retention is checked by returning to it.
+  await userEvent.click(screen.getByRole('button', { name: 'Atrás' }));
+  expect(screen.getByLabelText('Título')).toHaveValue('Borrador');
 });
 it('disables saving controls and clears dirty state only after success', async () => {
   let resolve!: (value: LessonDetails) => void;
   vi.mocked(saveLesson).mockReturnValue(new Promise((done) => { resolve = done; }));
   page();
   await userEvent.type(await screen.findByLabelText('Título'), ' editada');
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(screen.getByRole('button', { name: 'Guardando…' })).toBeDisabled();
-  expect(screen.getByLabelText('Título')).toBeDisabled();
+  // While saving, the whole step goes inert — not only the button that was pressed. The metadata
+  // fields cannot be checked here: they live on the first step, which is not rendered any more.
+  expect(screen.getByRole('button', { name: 'Atrás' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Agregar actividad' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Volver a Mis clases' })).toBeDisabled();
   resolve({ ...detail, title: 'Original editada' });
-  expect(await screen.findByRole('status')).toHaveTextContent('Clase guardada.');
+  await waitFor(() => expect(notifyLessonSaved).toHaveBeenCalledTimes(1));
+  // Nothing is pending any more, so leaving is not questioned.
   const confirm = vi.spyOn(window, 'confirm');
   await userEvent.click(screen.getByRole('button', { name: 'Volver a Mis clases' }));
   expect(confirm).not.toHaveBeenCalled();
@@ -132,6 +152,8 @@ async function metadata() {
   await userEvent.type(screen.getByLabelText('Título'), 'Clase');
   await userEvent.type(screen.getByLabelText('Tema'), 'Tema');
   await userEvent.type(screen.getByLabelText('Objetivo'), 'Objetivo');
+  // The activities only exist on the second step, so the helper leaves the editor there.
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
 }
 
 async function addActivity(type: string, title: string, instructions: string, duration?: string) {
@@ -171,7 +193,7 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
   // Reordering is local: it changes what will be saved and writes nothing.
   await userEvent.click(screen.getByRole('button', { name: 'Subir Conversación' }));
   expect(saveLesson).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
   expect(vi.mocked(saveLesson).mock.calls[0][0]).toEqual({
     title: 'Clase', level: 'A2', topic: 'Tema', objective: 'Objetivo',
@@ -187,8 +209,9 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
   await userEvent.clear(screen.getByLabelText('Duración (minutos)'));
   await userEvent.type(screen.getByLabelText('Duración (minutos)'), '20');
   expect(screen.getByText('Duración total:')).toHaveTextContent('30 min');
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
-  expect(await screen.findByRole('status')).toHaveTextContent('Clase guardada.');
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  // The alert is the only success channel now: the second save reopens it, and the draft is clean.
+  await waitFor(() => expect(notifyLessonSaved).toHaveBeenCalledTimes(2));
   // The local keys were replaced by the returned Ids, so the next save updates instead of inserting.
   const second = vi.mocked(saveLesson).mock.calls[1];
   expect(second[1]).toBe('l1');
@@ -204,7 +227,7 @@ it('blocks the whole save when one activity is invalid and marks it even if it i
   // Two activities without a duration: one invalid activity is enough to refuse the whole lesson.
   await addActivity('Writing', 'Escritura', 'Instrucciones');
   await userEvent.type(screen.getByLabelText('Consigna'), 'Escribe');
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(saveLesson).not.toHaveBeenCalled();
   // The editor opens the first activity that needs attention, but every other failed activity is
   // still marked in the list while it stays unselected.
@@ -221,7 +244,7 @@ it('blocks the whole save when one activity is invalid and marks it even if it i
   await userEvent.type(screen.getByLabelText('Duración (minutos)'), '10');
   expect(screen.getByText('Duración total:')).toHaveTextContent('15 min');
   expect(screen.queryByText('Indica la duración en minutos.')).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
   expect(vi.mocked(saveLesson).mock.calls[0][0].activities.map((activity) => activity.estimatedDuration)).toEqual([5, 10]);
 });
@@ -233,7 +256,7 @@ it('keeps the activity draft and marks the activity the server rejected', async 
   await metadata();
   await addActivity('Writing', 'Escritura', 'Instrucciones', '10');
   await userEvent.type(screen.getByLabelText('Consigna'), 'Escribe');
-  await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Texto obligatorio.');
   expect(saveLesson).toHaveBeenCalledTimes(1);
   expect(screen.getByLabelText('Consigna')).toHaveAccessibleDescription('Texto obligatorio.');

@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getCurrentUser, logout, type User } from '../auth';
+import type { User } from '../auth';
+import { LEVELS } from '../levels';
 import { transitionLesson, duplicateLesson, lessonDetailKey, lessonListKey, listLessons, type LessonFilters, type LessonLevel } from './lesson-api';
 import { formatLessonDuration } from './lesson-duration';
 
@@ -24,8 +25,6 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
     queryFn: ({ signal }) => listLessons(filters, signal, trash ? 'trash' : 'active'),
     retry: false,
   });
-  const profile = useQuery({ queryKey: ['me', user.id], queryFn: getCurrentUser, retry: false });
-  const signOut = useMutation({ mutationFn: logout, retry: false, onSuccess: () => client.clear() });
   const transition = useMutation({
     mutationFn: ({ id, action }: { id: string; action: 'trash' | 'restore' | 'delete' }) => transitionLesson(id, action),
     retry: false,
@@ -59,7 +58,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
       <div><label htmlFor="lesson-level">Nivel</label>
         <select id="lesson-level" value={level} onChange={(event) => setLevel(event.target.value as LessonLevel | '')}>
           <option value="">Todos los niveles</option>
-          <option value="A2">A2</option><option value="B1">B1</option><option value="B2">B2</option>
+          {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
       </div>
       <button type="submit">Buscar</button>
@@ -80,7 +79,10 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
       {lessons.isSuccess && <>
         {lessons.isFetching && <p role="status">Actualizando clases…</p>}
         {lessons.data.length === 0
-          ? <p>{trash ? 'La papelera está vacía.' : filtered ? 'No hay clases que coincidan con estos filtros.' : 'Aún no tienes clases.'}</p>
+          ? <>
+              <p>{trash ? 'La papelera está vacía.' : filtered ? 'No hay clases que coincidan con estos filtros.' : 'Aún no tienes clases.'}</p>
+              {!trash && !filtered && <p><Link to="/lessons/new">Crear clase</Link></p>}
+            </>
           : <ul className="lesson-list">{lessons.data.map((lesson) =>
             <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p>{!trash && <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>}<div className="lesson-actions">{!trash && <><Link className="button" to={"/lessons/" + lesson.id + "/play"}>Iniciar clase</Link>
               <Link className="button secondary" to={"/lessons/" + lesson.id + "/edit"} aria-label={'Editar ' + lesson.title}>Editar clase</Link>
@@ -97,14 +99,6 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
               {transition.isPending && transition.variables.id === lesson.id && <span role="status">Procesando…</span>}
               </div></li>)}</ul>}
       </>}
-    </div>
-    <div className="lesson-session">
-      <p>Sesión iniciada como <strong>{user.email}</strong>.</p>
-      {profile.isPending && <p role="status">Verificando tu cuenta…</p>}
-      {profile.isError && <p role="alert" className="error">{profile.error.message} <button onClick={() => void profile.refetch()}>Reintentar cuenta</button></p>}
-      {profile.isSuccess && <p className="status">Cuenta verificada con la API</p>}
-      {signOut.isError && <p role="alert" className="error">No se pudo cerrar la sesión en el servidor. Vuelve a intentarlo.</p>}
-      <button className="secondary" onClick={() => signOut.mutate()} disabled={signOut.isPending}>{signOut.isPending ? 'Cerrando…' : 'Cerrar sesión'}</button>
     </div>
   </section>;
 }

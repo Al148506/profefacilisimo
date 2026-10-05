@@ -1,12 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, Route, RouterProvider, Routes } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import StudentFormPage from './StudentFormPage';
 import { getStudent, saveStudent } from './student-api';
 import type { StudentDetails } from './student-api';
 import { useAuth } from '../auth';
+import { notifyStudentSaved } from '../notifications';
 
 vi.mock('./student-api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./student-api')>()),
@@ -16,6 +17,9 @@ vi.mock('../auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../auth')>()),
   useAuth: vi.fn(),
 }));
+// SweetAlert2 mounts outside every React root and marks the app `aria-hidden` while open, so the
+// alerts are stubbed here exactly as in the editor suite: the test checks that saving fired one.
+vi.mock('../notifications', () => ({ notifyStudentSaved: vi.fn() }));
 
 const details: StudentDetails = {
   id: 's1', name: 'Alba', level: 'B1', interests: 'Ajedrez', assignedLessonCount: 0,
@@ -26,13 +30,16 @@ const details: StudentDetails = {
 
 function page(path: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[path]}>
-    <Routes>
+  function TestRoutes() {
+    return <Routes>
+      <Route path="/students" element={<p>Listado</p>} />
       <Route path="/students/new" element={<StudentFormPage />} />
       <Route path="/students/:id/edit" element={<StudentFormPage />} />
       <Route path="/students/:id" element={<p>Ficha</p>} />
-    </Routes>
-  </MemoryRouter></QueryClientProvider>);
+    </Routes>;
+  }
+  const router = createMemoryRouter([{ path: '*', element: <TestRoutes /> }], { initialEntries: [path] });
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
   return client;
 }
 
@@ -51,6 +58,8 @@ it('creates a student, sending nulls for the untouched optionals', async () => {
   await waitFor(() => expect(saveStudent).toHaveBeenCalledWith(
     { name: 'Alba', level: 'B1', email: null, nativeLanguage: null, interests: null, goals: null, notes: null },
     undefined));
+  // One channel per save: the success alert is the confirmation the inline paragraph used to be.
+  await waitFor(() => expect(notifyStudentSaved).toHaveBeenCalledTimes(1));
 });
 
 it('loads the current profile, edits a field and writes only on confirm', async () => {

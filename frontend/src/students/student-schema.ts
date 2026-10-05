@@ -52,7 +52,7 @@ export type StudentFormValues = {
 
 /** A brand-new student: the required fields start empty and the optionals start as empty strings. */
 export function emptyStudentValues(): StudentFormValues {
-  return { name: '', level: 'B1', email: '', nativeLanguage: '', interests: '', goals: '', notes: '' };
+  return { name: '', level: 'A2', email: '', nativeLanguage: '', interests: '', goals: '', notes: '' };
 }
 
 /** Reads a saved student into the form. A stored `null` becomes an empty field, never the text "null". */

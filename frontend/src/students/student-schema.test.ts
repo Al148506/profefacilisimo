@@ -16,7 +16,7 @@ it('requires a name and a level', () => {
   expect(studentSchema.safeParse(raw({ name: 'Alba' })).success).toBe(true);
   // The form starts with an empty name and a default level.
   expect(emptyStudentValues().name).toBe('');
-  expect(emptyStudentValues().level).toBe('B1');
+  expect(emptyStudentValues().level).toBe('A2');
   // The form holds empty strings; `null` is what validation returns, never what the inputs hold.
   expect(emptyStudentValues().email).toBe('');
   expect(studentSchema.parse(raw({ name: 'Alba' })).email).toBeNull();

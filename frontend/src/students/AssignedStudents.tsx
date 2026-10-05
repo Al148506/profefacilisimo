@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { assignStudentToLesson, listAssignedStudents, listStudents, unassignStudentFromLesson } from './student-api';
 import type { AssignedStudent } from './student-api';
+import { readErrorMessage } from './student-errors';
 
 export type AssignedStudentsProps = {
   lessonId: string;
@@ -10,19 +11,6 @@ export type AssignedStudentsProps = {
 };
 
 const ACTIVE = 'active' as const;
-
-async function readErrorMessage(error: unknown, fallback: string): Promise<string> {
-  if (error instanceof Response) {
-    try {
-      const problem = await error.json();
-      if (Array.isArray(problem?.errors)) return problem.errors.join(' ');
-      if (typeof problem?.detail === 'string' && problem.detail) return problem.detail;
-      if (typeof problem?.title === 'string' && problem.title) return problem.title;
-    } catch { /* The body may not be JSON at all. */ }
-    return fallback;
-  }
-  return error instanceof Error ? error.message : fallback;
-}
 
 export default function AssignedStudents({ lessonId, userId }: AssignedStudentsProps) {
   const client = useQueryClient();
@@ -58,7 +46,7 @@ export default function AssignedStudents({ lessonId, userId }: AssignedStudentsP
         current.some((item) => item.id === student.id) ? current : [...current, student]);
       await invalidate();
     },
-    onError: async (error) => setAssignFailure(await readErrorMessage(error, 'No pudimos asignar al estudiante. Vuelve a intentarlo.')),
+    onError: (error) => setAssignFailure(readErrorMessage(error, 'No pudimos asignar al estudiante. Vuelve a intentarlo.')),
   });
 
   const unassign = useMutation({
@@ -73,8 +61,8 @@ export default function AssignedStudents({ lessonId, userId }: AssignedStudentsP
         current.filter((student) => student.id !== studentId));
       await invalidate();
     },
-    onError: async (error, { studentId }) =>
-      setFailedUnassign({ studentId, message: await readErrorMessage(error, 'No pudimos quitar la asignación. Vuelve a intentarlo.') }),
+    onError: (error, { studentId }) =>
+      setFailedUnassign({ studentId, message: readErrorMessage(error, 'No pudimos quitar la asignación. Vuelve a intentarlo.') }),
     onSettled: () => setPendingUnassign(null),
   });
 

@@ -27,12 +27,16 @@ test('builds the activity set, saves it as a whole and reproduces it after reloa
   const save = async () => {
     const answered = page.waitForResponse((response) =>
       response.url().includes('/api/lessons/' + lesson.id) && response.request().method() === 'PUT');
-    await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+    await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
     expect((await answered).status()).toBe(200);
+    // The success alert stays open until it is dismissed, and it would otherwise cover the editor.
+    await page.getByRole('button', { name: 'Aceptar' }).click();
   };
 
   await page.goto('/lessons/' + lesson.id + '/edit');
   await expect(page.getByRole('heading', { name: 'Editar clase' })).toBeVisible();
+  // The activities live on the second step of the wizard.
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByText('Duración total:')).toContainText('0 min');
 
   // Una lectura de 15 minutos con dos preguntas.
@@ -56,7 +60,7 @@ test('builds the activity set, saves it as a whole and reproduces it after reloa
   await expect(page.getByText('Duración incompleta')).toBeVisible();
 
   // Guardar con una duración pendiente no envía nada y marca la actividad en la lista.
-  await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
   await expect(page.getByText('Indica la duración en minutos.').first()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Pretérito indefinido/ })).toHaveAccessibleDescription('Indica la duración en minutos.');
 
@@ -75,6 +79,7 @@ test('builds the activity set, saves it as a whole and reproduces it after reloa
 
   // Recargar reproduce exactamente lo guardado.
   await page.reload();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.locator('.activity-name')).toHaveText(['Lectura: un viaje a Sevilla', 'Pretérito indefinido']);
   await expect(page.locator('.activity-duration')).toHaveText(['15 min', '10 min']);
   await expect(page.getByText('Duración total:')).toContainText('25 min');
@@ -103,6 +108,7 @@ test('builds the activity set, saves it as a whole and reproduces it after reloa
   expect(lesson2.activities).toHaveLength(0);
   expect(lesson2.estimatedDuration).toBe(0);
   await page.reload();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page.getByText('Duración total:')).toContainText('0 min');
 
   // Pantalla estrecha: el editor sigue siendo utilizable y no desborda.

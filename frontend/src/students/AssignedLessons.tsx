@@ -4,21 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatLessonDuration } from '../lessons/lesson-duration';
 import { listLessons, type LessonListItem } from '../lessons/lesson-api';
 import { assignLessonToStudent, unassignLessonFromStudent, type StudentDetails } from './student-api';
+import { readErrorMessage } from './student-errors';
 
 const ACTIVE = 'active' as const;
-
-async function readErrorMessage(error: unknown, fallback: string): Promise<string> {
-  if (error instanceof Response) {
-    try {
-      const problem = await error.json();
-      if (Array.isArray(problem?.errors)) return problem.errors.join(' ');
-      if (typeof problem?.detail === 'string' && problem.detail) return problem.detail;
-      if (typeof problem?.title === 'string' && problem.title) return problem.title;
-    } catch { /* The body may not be JSON at all. */ }
-    return fallback;
-  }
-  return error instanceof Error ? error.message : fallback;
-}
 
 /** The lessons assigned to a student, read from the profile that already carries them. */
 export default function AssignedLessons({ student, userId }: { student: StudentDetails; userId: string }) {
@@ -47,7 +35,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
     onSuccess: async () => {
       await invalidate();
     },
-    onError: async (error) => setAssignFailure(await readErrorMessage(error, 'No pudimos asignar la clase. Vuelve a intentarlo.')),
+    onError: (error) => setAssignFailure(readErrorMessage(error, 'No pudimos asignar la clase. Vuelve a intentarlo.')),
   });
 
   const unassign = useMutation({
@@ -60,8 +48,8 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
     onSuccess: async () => {
       await invalidate();
     },
-    onError: async (error, { lessonId }) =>
-      setFailedUnassign({ lessonId, message: await readErrorMessage(error, 'No pudimos quitar la asignación. Vuelve a intentarlo.') }),
+    onError: (error, { lessonId }) =>
+      setFailedUnassign({ lessonId, message: readErrorMessage(error, 'No pudimos quitar la asignación. Vuelve a intentarlo.') }),
     onSettled: () => setPendingUnassign(null),
   });
 
@@ -70,9 +58,6 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
   return <section className="student-assigned-lessons" data-testid="assigned-lessons">
     <h2>Clases asignadas</h2>
     <p>Añade o quita clases sin salir de la ficha del estudiante.</p>
-
-    {assignFailure && <p role="alert" className="error">{assignFailure}
-      <button className="secondary" onClick={() => assign.variables && assign.mutate(assign.variables)}>Reintentar</button></p>}
 
     {candidatesQuery.isError && <div role="alert" className="error">
       <p>No pudimos cargar tus clases.</p>
@@ -83,7 +68,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
       ? <p className="assigned-lessons-empty">Este estudiante todavía no tiene clases asignadas.</p>
       : <ul className="lesson-list">
         {assigned.map((lesson) => <li key={lesson.id}>
-          <h3 className="assigned-lesson-title">{lesson.title}</h3>
+          <p className="assigned-lesson-title">{lesson.title}</p>
           <span className="level-badge">{lesson.level}</span>
           <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>
           {lesson.inTrash && <span className="trash-mark" data-testid="trash-mark">En papelera</span>}
@@ -99,7 +84,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
         </li>)}
       </ul>}
 
-    <div className="student-picker" data-testid="student-picker">
+    <div className="student-picker" data-testid="lesson-picker">
       <label htmlFor="assigned-lesson-picker">Asignar clase</label>
       {candidatesQuery.isSuccess && candidates.length === 0
         ? <p>No tienes clases activas que asignar. <Link to="/lessons/new">Crear clase</Link></p>
@@ -110,6 +95,8 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
             {candidates.map((lesson: LessonListItem) => <option key={lesson.id} value={lesson.id}>{lesson.title} · {lesson.level}</option>)}
           </select>
           {assign.isPending && <span role="status">Asignando…</span>}
+          {assignFailure && <span role="alert" className="error">{assignFailure}
+            <button className="secondary" onClick={() => assign.variables && assign.mutate(assign.variables)}>Reintentar</button></span>}
         </>}
     </div>
   </section>;

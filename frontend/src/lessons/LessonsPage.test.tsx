@@ -1,13 +1,11 @@
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, expect, it, vi } from 'vitest';
 import LessonsPage from './LessonsPage';
 import { transitionLesson, duplicateLesson, lessonListKey, listLessons } from './lesson-api';
-import { logout } from '../auth';
 
-vi.mock('../auth', () => ({ getCurrentUser: vi.fn().mockResolvedValue({ id: 'u1' }), logout: vi.fn() }));
 vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), listLessons: vi.fn(), duplicateLesson: vi.fn(), transitionLesson: vi.fn() }));
 const user = { id: 'u1', email: 'profe@example.com' };
 const lesson = { id: 'l1', title: 'Viajes', level: 'B1' as const, topic: 'Vacaciones', estimatedDuration: 60, updatedAt: '2026-09-17', deletedAt: null };
@@ -25,6 +23,9 @@ it('shows loading followed by initial empty state', async () => {
   expect(screen.getByText('Cargando tus clases…')).toBeInTheDocument();
   resolve([]);
   expect(await screen.findByText('Aún no tienes clases.')).toBeInTheDocument();
+  // Two links share the name now (nav + empty CTA): scope to the results region.
+  const live = document.querySelector('[aria-live="polite"]') as HTMLElement;
+  expect(within(live).getByRole('link', { name: 'Crear clase' })).toHaveAttribute('href', '/lessons/new');
 });
 it('shows title, level and topic in server order', async () => {
   vi.mocked(listLessons).mockResolvedValue([lesson, { ...lesson, id: 'l2', title: 'Segunda' }]);
@@ -99,26 +100,6 @@ it('keys cache by user, state and effective filters', () => {
   expect(lessonListKey('u1', { search: ' viaje ', level: 'B1' })).toEqual(['lessons', 'u1', 'active', 'viaje', 'B1']);
   expect(lessonListKey('u1', { search: '', level: '' })).not.toEqual(lessonListKey('u2', { search: '', level: '' }));
 });
-it('disables sign out while pending and retains data when logout fails', async () => {
-  let reject!: (error: Error) => void;
-  vi.mocked(logout).mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
-  const { client } = page();
-  await screen.findByText('Aún no tienes clases.');
-  await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
-  expect(screen.getByRole('button', { name: 'Cerrando…' })).toBeDisabled();
-  reject(new Error('Offline'));
-  expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cerrar');
-  expect(client.getQueryData(lessonListKey(user.id, { search: '', level: '' }))).toEqual([]);
-});
-it('clears cached data when logout succeeds', async () => {
-  vi.mocked(logout).mockResolvedValue();
-  const { client } = page();
-  const clear = vi.spyOn(client, 'clear');
-  await screen.findByText('Aún no tienes clases.');
-  await userEvent.click(screen.getByRole('button', { name: 'Cerrar sesión' }));
-  await waitFor(() => expect(clear).toHaveBeenCalledOnce());
-});
-
 it('disables duplicate while pending and opens the copy only after success', async () => {
   vi.mocked(listLessons).mockResolvedValue([lesson]);
   let resolve!: (value: Awaited<ReturnType<typeof duplicateLesson>>) => void;

@@ -1,54 +1,71 @@
 
-:root { font-family: 'DM Sans', system-ui, sans-serif; color: #173b37; background: #f5f6ef; font-synthesis: none; }
+:root { --pf-ink: #173b37; --pf-line: #dfe5d8; --pf-muted: #3c5a4e; --pf-accent: #97b54d; --pf-primary: #234e41; --pf-link: #286354; --pf-tint: #f1f5e6; --pf-border: #c5d1c5; --pf-surface: #f7f8f2; --pf-quiet: #62736b; --pf-danger: #a52d31; --pf-eyebrow: #607448; font-family: system-ui, sans-serif; color: var(--pf-ink); background: #f5f6ef; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
 header { max-width: 1200px; margin: auto; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-a { color: #286354; text-underline-offset: 4px; }
+a { color: var(--pf-link); text-underline-offset: 4px; }
 .brand { font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 12px; }
-.brand span { background: #234e41; color: #e5efb3; border-radius: 12px; font-size: 24px; padding: 8px 12px; }
+.brand span { background: var(--pf-primary); color: #e5efb3; border-radius: 12px; font-size: 24px; padding: 8px 12px; }
 .header-note, footer { font-size: 13px; color: #596c60; }
 main { min-height: calc(100dvh - 170px); display: grid; place-items: center; padding: 28px 20px 48px; }
-.card { width: min(100%, 470px); background: #fffefb; padding: 38px; border: 1px solid #dfe5d8; border-radius: 24px; box-shadow: 0 12px 50px #234e4108; }
+.card { width: min(100%, 470px); background: #fffefb; padding: 38px; border: 1px solid var(--pf-line); border-radius: 24px; box-shadow: 0 12px 50px #234e4108; }
 .dashboard { width: min(100%, 630px); }
-.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; font-weight: 700; color: #607448; }
-h1 { font-family: Manrope, system-ui, sans-serif; font-size: clamp(26px, 4vw, 34px); line-height: 1.2; letter-spacing: -.04em; margin: 16px 0; }
+.eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; font-weight: 700; color: var(--pf-eyebrow); }
+h1 { font-family: system-ui, sans-serif; font-size: clamp(26px, 4vw, 34px); line-height: 1.2; letter-spacing: -.04em; margin: 16px 0; }
 h2 { font-size: 18px; margin-top: 0; }
 p { line-height: 1.65; color: #53645e; overflow-wrap: anywhere; }
 form { display: flex; flex-direction: column; margin-top: 26px; }
 label { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-input { font: inherit; width: 100%; border: 1px solid #c5d1c5; border-radius: 9px; padding: 12px; color: #173b37; background: white; }
-small { font-size: 12px; color: #62736b; margin: 6px 0; }
+input { font: inherit; width: 100%; border: 1px solid var(--pf-border); border-radius: 9px; padding: 12px; color: var(--pf-ink); background: white; }
+small { font-size: 12px; color: var(--pf-quiet); margin: 6px 0; }
 small.error { min-height: 15px; margin-bottom: 12px; }
-button, .button { font: inherit; font-weight: 600; background: #234e41; border: 1px solid #234e41; color: white; padding: 13px 18px; border-radius: 10px; cursor: pointer; text-align: center; text-decoration: none; display: inline-block; }
+button, .button { font: inherit; font-weight: 600; background: var(--pf-primary); border: 1px solid var(--pf-primary); color: white; padding: 13px 18px; border-radius: 10px; cursor: pointer; text-align: center; text-decoration: none; display: inline-block; }
 button:hover, .button:hover { background: #173d32; }
-button:disabled { opacity: .65; cursor: wait; }
-button.secondary, .button.secondary { background: transparent; color: #234e41; }
-:focus-visible { outline: 3px solid #97b54d; outline-offset: 3px; }
-.error { color: #a52d31; }
+button:disabled { opacity: .65; cursor: not-allowed; }
+button.secondary, .button.secondary { background: transparent; color: var(--pf-primary); }
+:focus-visible { outline: 3px solid var(--pf-accent); outline-offset: 3px; }
+.error { color: var(--pf-danger); }
 .footnote { text-align: center; font-size: 13px; margin-bottom: 0; }
-.notice { padding: 24px; margin: 28px 0; background: #f1f5e6; border: 1px solid #dce6c5; border-radius: 12px; }
+.notice { padding: 24px; margin: 28px 0; background: var(--pf-tint); border: 1px solid #dce6c5; border-radius: 12px; }
 .notice p { margin-bottom: 0; }
-.status { color: #286354; font-size: 13px; }
+.status { color: var(--pf-link); font-size: 13px; }
 footer { text-align: center; padding: 22px; }
 @media (max-width: 600px) { header { padding: 20px; } .header-note { display: none; } .card { padding: 26px; } }
+
+/* SweetAlert2 alerts, themed with the same tokens as the rest of the app. The library ships its own
+   stylesheet (imported in `main.tsx`); these rules only restate colours, type and the card shape. */
+.pf-alert { width: min(100% - 32px, 420px); background: #fffefb; border: 1px solid var(--pf-line); border-radius: 24px; box-shadow: 0 12px 50px #234e4108; font-family: system-ui, sans-serif; color: var(--pf-ink); padding: 30px 28px; }
+.pf-alert .swal2-title { font-family: system-ui, sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -.02em; color: var(--pf-ink); padding: 0; margin: 14px 0 0; }
+.pf-alert .swal2-html-container { font-size: 15px; line-height: 1.65; color: #53645e; margin: 10px 0 0; }
+.pf-alert .swal2-icon { margin: 0 auto; border-width: 3px; }
+.pf-alert .swal2-actions { margin: 24px 0 0; }
+.pf-alert .swal2-confirm { font: inherit; font-weight: 600; padding: 13px 18px; border-radius: 10px; box-shadow: none; }
+.pf-alert .swal2-confirm:focus-visible { outline: 3px solid var(--pf-accent); outline-offset: 3px; }
+/* The success mark is restated in the project's green; the error mark keeps the app's red. */
+.pf-alert .swal2-icon.swal2-success { border-color: var(--pf-accent); color: var(--pf-link); }
+.pf-alert .swal2-icon.swal2-success [class^='swal2-success-line'] { background-color: var(--pf-link); }
+.pf-alert .swal2-icon.swal2-success .swal2-success-ring { border-color: #c9dca0; }
+.pf-alert .swal2-icon.swal2-error { border-color: #d9a5a7; color: var(--pf-danger); }
+.pf-alert .swal2-icon.swal2-error [class^='swal2-x-mark-line'] { background-color: var(--pf-danger); }
+@media (max-width: 600px) { .pf-alert { padding: 24px 20px; } }
 
 .lessons-page { width: min(100%, 960px); }
 .lesson-filters { display: flex; flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 28px; }
 .lesson-filters > div { flex: 1 1 180px; }
 .lesson-filters label { display: block; }
-select { font: inherit; width: 100%; border: 1px solid #c5d1c5; border-radius: 9px; padding: 12px; color: #173b37; background: white; }
+select { font: inherit; width: 100%; border: 1px solid var(--pf-border); border-radius: 9px; padding: 12px; color: var(--pf-ink); background: white; }
 .lesson-list { list-style: none; padding: 0; display: grid; gap: 14px; }
-.lesson-list li { border: 1px solid #dfe5d8; border-radius: 12px; padding: 20px; }
+.lesson-list li { border: 1px solid var(--pf-line); border-radius: 12px; padding: 20px; }
 .lesson-list h2 { overflow-wrap: anywhere; margin-bottom: 12px; }
 .lesson-list p { margin-bottom: 0; }
-.level-badge { display: inline-block; background: #f1f5e6; color: #286354; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; }
-.lesson-duration { margin: 10px 0 0; font-size: 14px; font-weight: 600; color: #3c5a4e; }
-.lesson-session { border-top: 1px solid #dfe5d8; margin-top: 28px; padding-top: 14px; }
+.level-badge { display: inline-block; background: var(--pf-tint); color: var(--pf-link); padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; }
+.lesson-duration { margin: 10px 0 0; font-size: 14px; font-weight: 600; color: var(--pf-muted); }
+.lesson-session { border-top: 1px solid var(--pf-line); margin-top: 28px; padding-top: 14px; }
 @media (max-width: 600px) { .lesson-filters { flex-direction: column; align-items: stretch; } .lesson-filters > div { flex-basis: auto; } }
 
 .lesson-editor { width: min(100%, 720px); }
 .lesson-editor fieldset { display: flex; flex-direction: column; border: 0; padding: 0; margin: 0; min-width: 0; }
-textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid #c5d1c5; border-radius: 9px; padding: 12px; color: #173b37; background: white; }
+textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid var(--pf-border); border-radius: 9px; padding: 12px; color: var(--pf-ink); background: white; }
 .editor-back { margin-top: 18px; }
 .lesson-list a { display: inline-block; margin-top: 12px; overflow-wrap: anywhere; }
 .duplicate-button { margin: 12px 0 0 14px; }
@@ -59,34 +76,54 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid #c5d1
 button.danger { background: #8c3033; border-color: #8c3033; }
 @media (max-width: 600px) { .lesson-actions { align-items: stretch; flex-direction: column; } }
 
+/* The wizard: one group of fields at a time, so the editor never shows both forms at once. */
+/* Explicit, because `legend` is not a `label` and the reset rule of `fieldset` sets `border: 0`. */
+.lesson-editor fieldset legend { font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; margin-bottom: 6px; }
+.editor-step-hint { font-size: 13px; margin: 0 0 18px; }
+.editor-steps { border-bottom: 1px solid var(--pf-line); padding-bottom: 16px; }
+.editor-steps-count { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--pf-eyebrow); margin: 0 0 10px; }
+.editor-steps-list { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; margin: 0; }
+.editor-step { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--pf-quiet); }
+.editor-step-number { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--pf-border); background: var(--pf-surface); color: var(--pf-quiet); font-size: 13px; font-weight: 700; }
+/* Arrow between steps, drawn with a pseudo-element so it is never read out. */
+.editor-step + .editor-step::before { content: '→'; color: var(--pf-quiet); margin-right: 8px; }
+.editor-step.is-current { color: var(--pf-ink); }
+.editor-step.is-current .editor-step-number { background: var(--pf-primary); border-color: var(--pf-primary); color: #e5efb3; }
+.editor-step.is-current .editor-step-label { border-bottom: 2px solid var(--pf-accent); padding-bottom: 2px; }
+.editor-step.is-done .editor-step-number { background: #eef4d9; border-color: var(--pf-accent); color: var(--pf-link); }
+.editor-step-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--pf-link); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.editor-step-link:hover { background: none; color: var(--pf-ink); }
+.editor-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+.editor-actions > button { flex: 1 1 160px; }
+.editor-step-hint { max-width: 46ch; }
 /* Higher specificity than `.lesson-editor fieldset`, which resets border and padding. */
-.lesson-editor fieldset.activity-section { display: block; border-top: 1px solid #dfe5d8; margin-top: 28px; padding-top: 18px; }
-.activity-section legend { font-family: Manrope, system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
-.activity-total { font-weight: 600; color: #3c5a4e; margin: 12px 0 18px; }
+.lesson-editor fieldset.activity-section { display: block; }
+.activity-section legend { font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
+.activity-total { font-weight: 600; color: var(--pf-muted); margin: 12px 0 18px; }
 .activity-add { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
 .activity-add > div { flex: 1 1 200px; }
 .activity-add button { flex: 0 0 auto; }
-.activity-empty { padding: 18px; background: #f7f8f2; border: 1px dashed #c5d1c5; border-radius: 12px; margin-bottom: 20px; }
+.activity-empty { padding: 18px; background: var(--pf-surface); border: 1px dashed var(--pf-border); border-radius: 12px; margin-bottom: 20px; }
 .activity-list { list-style: none; padding: 0; display: grid; gap: 12px; margin-bottom: 22px; }
-.activity-item { border: 1px solid #dfe5d8; border-radius: 12px; padding: 12px; }
+.activity-item { border: 1px solid var(--pf-line); border-radius: 12px; padding: 12px; }
 .activity-item.has-error { border-color: #d9a5a7; background: #fdf7f7; }
 .activity-item-main { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.activity-select { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: 1 1 240px; background: #f7f8f2; border: 1px solid #dfe5d8; color: #173b37; text-align: left; padding: 12px 14px; }
+.activity-select { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: 1 1 240px; background: var(--pf-surface); border: 1px solid var(--pf-line); color: var(--pf-ink); text-align: left; padding: 12px 14px; }
 .activity-select:hover { background: #eef2e4; }
-.activity-select[aria-pressed="true"] { background: #eef4d9; border-color: #97b54d; box-shadow: inset 4px 0 0 #234e41; }
-.activity-position { font-weight: 700; color: #607448; }
+.activity-select[aria-pressed="true"] { background: #eef4d9; border-color: var(--pf-accent); box-shadow: inset 4px 0 0 var(--pf-primary); }
+.activity-position { font-weight: 700; color: var(--pf-eyebrow); }
 .activity-name { flex: 1 1 150px; overflow-wrap: anywhere; }
-.activity-type { font-size: 11px; font-weight: 700; background: #f1f5e6; color: #286354; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
-.activity-duration { font-size: 13px; font-weight: 600; color: #3c5a4e; white-space: nowrap; }
+.activity-type { font-size: 11px; font-weight: 700; background: var(--pf-tint); color: var(--pf-link); padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+.activity-duration { font-size: 13px; font-weight: 600; color: var(--pf-muted); white-space: nowrap; }
 .activity-order { display: flex; gap: 8px; }
 /* Compact controls: the list row has to keep the title, the type and the duration on one line. */
 .activity-order button, .activity-remove { padding: 10px 12px; font-size: 14px; }
 .activity-error { margin: 10px 0 0; font-size: 13px; }
-.activity-form { border: 1px solid #dfe5d8; border-radius: 12px; padding: 20px; background: #fbfcf7; }
+.activity-form { border: 1px solid var(--pf-line); border-radius: 12px; padding: 20px; background: #fbfcf7; }
 .activity-form h3 { font-size: 16px; margin: 0 0 16px; }
 .activity-field { display: flex; flex-direction: column; }
 .activity-rows { border-top: 1px solid #e6ebdd; margin-top: 12px; padding-top: 14px; }
-.activity-rows-legend { font-weight: 700; font-size: 14px; color: #3c5a4e; margin: 0 0 10px; }
+.activity-rows-legend { font-weight: 700; font-size: 14px; color: var(--pf-muted); margin: 0 0 10px; }
 .activity-row { display: flex; flex-direction: column; border-bottom: 1px solid #eef1e8; padding-bottom: 10px; margin-bottom: 10px; }
 .activity-row:last-of-type { border-bottom: 0; }
 .activity-row > button { align-self: flex-end; }
@@ -96,6 +133,10 @@ button.danger { background: #8c3033; border-color: #8c3033; }
   .activity-add > div, .activity-select { flex-basis: auto; }
   .activity-order, .activity-remove { width: 100%; }
   .activity-order button { flex: 1 1 0; }
+  /* The two wizard actions stack, keeping the main one last so it stays the closest to the thumb. */
+  .editor-actions { flex-direction: column-reverse; align-items: stretch; }
+  .editor-steps-list { gap: 6px; }
+  .editor-step { font-size: 13px; }
 }
 
 /* Player. Every class is frozen by the contract (C3) and prefixed `lesson-player-`/`player-activity-`,
@@ -106,34 +147,34 @@ button.danger { background: #8c3033; border-color: #8c3033; }
    The `margin` reset is load-bearing: the global `header` rule above sets `margin: auto` for the site
    masthead, and this element is also a `<header>`. Without the reset the block is centred and floats
    away from the left edge instead of starting there. */
-.lesson-player-header { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px 28px; margin: 0; max-width: none; padding-bottom: 18px; border-bottom: 1px solid #dfe5d8; }
+.lesson-player-header { display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px 28px; margin: 0; max-width: none; padding-bottom: 18px; border-bottom: 1px solid var(--pf-line); }
 /* The badge leads the title but must not compete with it, so the title stays at `h1` size. */
 .lesson-player-heading { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
 .lesson-player-heading h1 { margin: 0; overflow-wrap: anywhere; }
 /* Progress, activity, type and duration are one line of secondary metadata, not headings. */
-.lesson-player-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 14px; font-weight: 600; color: #3c5a4e; }
-.lesson-player-meta-separator { color: #97b54d; }
+.lesson-player-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 14px; font-weight: 600; color: var(--pf-muted); }
+.lesson-player-meta-separator { color: var(--pf-accent); }
 .lesson-player-tools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-left: auto; }
 .lesson-player-tools button { padding: 10px 14px; font-size: 14px; }
 .lesson-player-tools a { font-size: 14px; }
 
 /* The body is the one thing that scrolls, so the header and the controls never leave the screen. */
 .lesson-player-body { max-height: 60vh; overflow-y: auto; padding: 22px 2px; }
-.lesson-player-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border-top: 1px solid #dfe5d8; padding-top: 18px; }
+.lesson-player-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; border-top: 1px solid var(--pf-line); padding-top: 18px; }
 .lesson-player-controls .secondary { margin-left: auto; }
 
 .lesson-player-closing, .lesson-player-empty, .lesson-player-status { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .lesson-player-closing h1, .lesson-player-empty h1 { margin: 6px 0; }
-.lesson-player-summary { font-size: 16px; color: #3c5a4e; }
-.lesson-player-summary strong { color: #173b37; }
+.lesson-player-summary { font-size: 16px; color: var(--pf-muted); }
+.lesson-player-summary strong { color: var(--pf-ink); }
 .lesson-player-empty p, .lesson-player-status p { margin: 0; }
 .lesson-player-status { gap: 14px; }
 
 /* One activity, read-only. The instructions lead and the type content follows, both at reading size. */
 .player-activity { display: flex; flex-direction: column; gap: 16px; }
-.player-activity-instructions { font-size: 17px; font-weight: 600; color: #234e41; background: #f1f5e6; border-left: 4px solid #97b54d; border-radius: 0 10px 10px 0; padding: 14px 18px; margin: 0; }
-.player-activity-text, .player-activity-prompt, .player-activity-explanation { font-size: 18px; line-height: 1.75; color: #173b37; margin: 0; white-space: pre-line; }
-.player-activity-list { font-size: 18px; line-height: 1.75; color: #173b37; margin: 0; padding-left: 26px; display: grid; gap: 10px; }
+.player-activity-instructions { font-size: 17px; font-weight: 600; color: var(--pf-primary); background: var(--pf-tint); border-left: 4px solid var(--pf-accent); border-radius: 0 10px 10px 0; padding: 14px 18px; margin: 0; }
+.player-activity-text, .player-activity-prompt, .player-activity-explanation { font-size: 18px; line-height: 1.75; color: var(--pf-ink); margin: 0; white-space: pre-line; }
+.player-activity-list { font-size: 18px; line-height: 1.75; color: var(--pf-ink); margin: 0; padding-left: 26px; display: grid; gap: 10px; }
 .player-activity-list li { padding-left: 4px; }
 
 /* The card is padded generously, which reads as centred on a big screen. Fullscreen removes that
@@ -158,29 +199,29 @@ button.danger { background: #8c3033; border-color: #8c3033; }
 .students-page { width: min(100%, 880px); }
 /* The actions sit on their own line, level with the heading, so a long name never squeezes them. */
 .students-navigation { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 18px 0; }
-.students-filters { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin: 18px 0 22px; padding: 18px; background: #f1f5e6; border-radius: 12px; }
+.students-filters { display: flex; flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin: 18px 0 22px; padding: 18px; background: var(--pf-tint); border-radius: 12px; }
 /* The fields share the row; the inner `column` keeps each label above its own control. */
 .students-filters > div { display: flex; flex: 1 1 220px; flex-direction: column; gap: 6px; }
 
 /* One student per row: the name leads, the metadata follows, and the actions close the row. */
 .student-list { display: grid; gap: 14px; padding: 0; margin: 0; list-style: none; }
-.student-list > li { display: grid; gap: 6px; padding: 16px 18px; background: #f8faf3; border: 1px solid #dfe5d8; border-radius: 12px; }
+.student-list > li { display: grid; gap: 6px; padding: 16px 18px; background: #f8faf3; border: 1px solid var(--pf-line); border-radius: 12px; }
 .student-list h2 { margin: 0; font-size: 18px; }
 .student-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; }
 /* The interests summary is secondary: it is a hint about the student, not the reason to open it. */
-.student-interests, .student-assigned-count { margin: 0; font-size: 14px; color: #3c5a4e; }
+.student-interests, .student-assigned-count { margin: 0; font-size: 14px; color: var(--pf-muted); }
 
 /* The profile keeps its fields in a definition list, one pair per row, so the labels line up. */
 .student-profile { width: min(100%, 880px); }
 .student-profile-fields { display: grid; gap: 12px; margin: 20px 0 26px; }
 .student-profile-fields > div { display: grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid #eef2e6; }
-.student-profile-fields dt { font-size: 14px; font-weight: 600; color: #3c5a4e; }
-.student-profile-fields dd { margin: 0; color: #173b37; white-space: pre-line; overflow-wrap: anywhere; }
+.student-profile-fields dt { font-size: 14px; font-weight: 600; color: var(--pf-muted); }
+.student-profile-fields dd { margin: 0; color: var(--pf-ink); white-space: pre-line; overflow-wrap: anywhere; }
 
 /* The assigned-lessons section of the profile mirrors the assigned-students one of the editor: both
    are a picker plus a list, and assigning never leaves the page it was done from. */
-.student-assigned-lessons, .assigned-students { margin-top: 28px; padding-top: 22px; border-top: 1px solid #dfe5d8; }
-.assigned-lessons-empty, .assigned-students-empty { color: #3c5a4e; }
+.student-assigned-lessons, .assigned-students { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--pf-line); }
+.assigned-lessons-empty, .assigned-students-empty { color: var(--pf-muted); }
 .assigned-lesson-title { margin: 0; font-size: 17px; }
 .student-picker { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 18px; }
 .student-picker select { min-width: 240px; }
@@ -194,4 +235,9 @@ button.danger { background: #8c3033; border-color: #8c3033; }
   .student-actions { flex-direction: column; align-items: stretch; }
   .student-picker select { width: 100%; min-width: 0; }
 }
+
+.student-form { width: min(100%, 880px); }
+.session-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 14px; margin-left: auto; font-size: 13px; }
+.session-bar p { margin: 0; }
+.session-bar button { padding: 10px 14px; font-size: 13px; }
 
