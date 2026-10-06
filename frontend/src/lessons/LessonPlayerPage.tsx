@@ -122,7 +122,7 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
         <h1>{lesson.title}</h1>
         <p>Esta clase todavía no tiene actividades.</p>
         <div className="lesson-player-controls">
-          <Link className="button pf-btn" to={'/lessons/' + lesson.id + '/edit'}><Pencil aria-hidden="true" size={17} />Editar la clase</Link>
+          <Link className="button pf-btn pf-btn--warning" to={'/lessons/' + lesson.id + '/edit'}><Pencil aria-hidden="true" size={17} />Editar la clase</Link>
           <Link className="secondary" to="/">Volver a Mis clases</Link>
         </div>
       </div>

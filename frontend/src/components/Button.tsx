@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes } from "react";
 import type { LucideIcon } from "lucide-react";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "accent";
+export type ButtonVariant = "primary" | "secondary" | "danger" | "accent" | "warning";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;

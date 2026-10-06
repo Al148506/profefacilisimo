@@ -87,7 +87,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
             </>
           : <ul className="lesson-list">{lessons.data.map((lesson) =>
             <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p>{!trash && <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>}<div className="lesson-actions">{!trash && <><Link className="button pf-btn" to={"/lessons/" + lesson.id + "/play"}><Play aria-hidden="true" size={17} />Iniciar clase</Link>
-              <Link className="button secondary pf-btn" to={"/lessons/" + lesson.id + "/edit"} aria-label={'Editar ' + lesson.title}><Pencil aria-hidden="true" size={17} />Editar clase</Link>
+              <Link className="button pf-btn pf-btn--warning" to={"/lessons/" + lesson.id + "/edit"} aria-label={'Editar ' + lesson.title}><Pencil aria-hidden="true" size={17} />Editar clase</Link>
               <Button variant="accent" className="duplicate-button" type="button" disabled={busy}
                 icon={Copy}
                 aria-label={'Duplicar ' + lesson.title} onClick={() => duplicate.mutate(lesson.id)}>

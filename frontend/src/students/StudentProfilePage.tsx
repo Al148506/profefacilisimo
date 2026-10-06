@@ -50,7 +50,7 @@ export default function StudentProfilePage() {
     <h1>{student.name}</h1>
     <nav className="students-navigation">
       <Link to="/students">Volver a Mis estudiantes</Link>
-      <Link className="button secondary pf-btn" to={'/students/' + student.id + '/edit'}><Pencil aria-hidden="true" size={17} />Editar</Link>
+      <Link className="button pf-btn pf-btn--warning" to={'/students/' + student.id + '/edit'}><Pencil aria-hidden="true" size={17} />Editar</Link>
       <Button variant="secondary" icon={Trash2} disabled={transition.isPending} onClick={act}>Enviar a papelera</Button>
     </nav>
     {transition.isError && <p role="alert" className="error">{transition.error instanceof TypeError
