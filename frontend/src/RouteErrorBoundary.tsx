@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -24,7 +25,7 @@ export default class RouteErrorBoundary extends Component<Props, State> {
     if (!this.state.error) return this.props.children;
     return <section className="card">
       <div role="alert" className="error"><p>{this.state.error.message}</p></div>
-      <Link className="button secondary" to="/">Volver a Mis clases</Link>
+      <Link className="button secondary pf-btn" to="/"><ArrowLeft aria-hidden="true" size={17} />Volver a Mis clases</Link>
     </section>;
   }
 }

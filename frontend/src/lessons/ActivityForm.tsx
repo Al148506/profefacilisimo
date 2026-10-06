@@ -1,3 +1,5 @@
+import { Plus, Trash2 } from 'lucide-react';
+import { Button } from '../components/Button';
 import {
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, applyType, hasSpecificContent,
   type ActivityDraft, type ActivityType,
@@ -41,14 +43,14 @@ function Rows({ id, path, legend, itemLabel, addLabel, values, errors, onChange 
           onChange={(event) => onChange(values.map((current, position) => (position === index ? event.target.value : current)))} />
         <small className="error" id={errorId}>{message}</small>
         {/* The last remaining row stays: an activity always needs at least one question or exercise. */}
-        <button type="button" className="secondary" disabled={values.length === 1}
+        <Button variant="secondary" type="button" icon={Trash2} disabled={values.length === 1}
           aria-label={'Quitar ' + itemLabel.toLowerCase() + ' ' + (index + 1)}
-          onClick={() => onChange(values.filter((_, position) => position !== index))}>Quitar</button>
+          onClick={() => onChange(values.filter((_, position) => position !== index))}>Quitar</Button>
       </div>;
     })}
     {listError && <small className="error">{listError}</small>}
-    <button type="button" className="secondary" disabled={values.length >= MAX_ROWS}
-      onClick={() => onChange([...values, ''])}>Añadir {addLabel}</button>
+    <Button variant="secondary" type="button" icon={Plus} disabled={values.length >= MAX_ROWS}
+      onClick={() => onChange([...values, ''])}>Añadir {addLabel}</Button>
   </div>;
 }
 

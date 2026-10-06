@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft, ArrowRight, Maximize2, Minimize2, Pencil, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth';
+import { Button } from '../components/Button';
 import ActivityView from './ActivityView';
 import { getLesson, lessonDetailKey, type LessonDetails } from './lesson-api';
 import { formatLessonDuration } from './lesson-duration';
@@ -120,7 +122,7 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
         <h1>{lesson.title}</h1>
         <p>Esta clase todavía no tiene actividades.</p>
         <div className="lesson-player-controls">
-          <Link className="button" to={'/lessons/' + lesson.id + '/edit'}>Editar la clase</Link>
+          <Link className="button pf-btn" to={'/lessons/' + lesson.id + '/edit'}><Pencil aria-hidden="true" size={17} />Editar la clase</Link>
           <Link className="secondary" to="/">Volver a Mis clases</Link>
         </div>
       </div>
@@ -134,7 +136,7 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
         <p className="lesson-player-summary">Actividades impartidas: <strong>{count}</strong></p>
         <p className="lesson-player-summary">Duración total: <strong>{formatLessonDuration(lesson.estimatedDuration)}</strong></p>
         <div className="lesson-player-controls">
-          <button type="button" onClick={() => move(0)}>Repetir la clase</button>
+          <Button type="button" icon={RefreshCw} onClick={() => move(0)}>Repetir la clase</Button>
           <Link className="secondary" to="/">Volver a Mis clases</Link>
         </div>
       </div>
@@ -161,8 +163,9 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
       </div>
       <div className="lesson-player-tools">
         <Link className="secondary" to="/">Volver a Mis clases</Link>
-        {fullscreenSupported && <button type="button" className="secondary" data-testid="player-fullscreen"
-          aria-pressed={fullscreen} onClick={toggleFullscreen}>{fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}</button>}
+        {fullscreenSupported && <Button variant="secondary" type="button" data-testid="player-fullscreen"
+          icon={fullscreen ? Minimize2 : Maximize2}
+          aria-pressed={fullscreen} onClick={toggleFullscreen}>{fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}</Button>}
         <Link data-testid="player-edit" to={'/lessons/' + lesson.id + '/edit'}>Editar</Link>
       </div>
     </header>
@@ -170,9 +173,9 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
       <ActivityView activity={current} />
     </div>
     <div className="lesson-player-controls">
-      <button type="button" data-testid="player-previous" disabled={position.index === 0}
-        onClick={() => move(position.index - 1)}>Anterior</button>
-      <button type="button" data-testid="player-next" onClick={() => move(position.index + 1)}>Siguiente</button>
+      <Button type="button" data-testid="player-previous" icon={ArrowLeft} disabled={position.index === 0}
+        onClick={() => move(position.index - 1)}>Anterior</Button>
+      <Button type="button" data-testid="player-next" icon={ArrowRight} onClick={() => move(position.index + 1)}>Siguiente</Button>
     </div>
   </section>;
 }
@@ -191,7 +194,7 @@ export default function LessonPlayerPage() {
     if (query.error.message === NOT_FOUND_MESSAGE) {
       return <PlayerStatusCard>
         <p role="alert">{NOT_FOUND_MESSAGE}</p>
-        <Link className="button" to="/">Volver a Mis clases</Link>
+        <Link className="button pf-btn" to="/"><ArrowLeft aria-hidden="true" size={17} />Volver a Mis clases</Link>
       </PlayerStatusCard>;
     }
     // A failed load stays on the screen: the retry is offered here, without navigating away.
@@ -199,7 +202,7 @@ export default function LessonPlayerPage() {
       <p>{query.error instanceof TypeError
         ? 'No pudimos cargar la clase. Comprueba tu conexión y vuelve a intentarlo.'
         : query.error.message}</p>
-      <button type="button" disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button>
+      <Button type="button" icon={RefreshCw} disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</Button>
     </div></PlayerStatusCard>;
   }
   return <LessonPlayer lesson={query.data} />;

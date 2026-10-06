@@ -1,6 +1,8 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth';
+import { Button } from '../components/Button';
 import { getStudent, studentDetailKey, transitionStudent } from './student-api';
 import AssignedLessons from './AssignedLessons';
 
@@ -35,8 +37,8 @@ export default function StudentProfilePage() {
     {query.isPending
       ? <p role="status">Cargando estudiante…</p>
       : <div role="alert" className="error"><p>{query.error?.message}</p>
-        <button disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button></div>}
-    <Link className="button secondary" to="/students">Volver a Mis estudiantes</Link>
+        <Button icon={RefreshCw} disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</Button></div>}
+    <Link className="button secondary pf-btn" to="/students"><ArrowLeft aria-hidden="true" size={17} />Volver a Mis estudiantes</Link>
   </section>;
   const student = query.data;
   function act() {
@@ -48,8 +50,8 @@ export default function StudentProfilePage() {
     <h1>{student.name}</h1>
     <nav className="students-navigation">
       <Link to="/students">Volver a Mis estudiantes</Link>
-      <Link className="button secondary" to={'/students/' + student.id + '/edit'}>Editar</Link>
-      <button className="secondary" disabled={transition.isPending} onClick={act}>Enviar a papelera</button>
+      <Link className="button secondary pf-btn" to={'/students/' + student.id + '/edit'}><Pencil aria-hidden="true" size={17} />Editar</Link>
+      <Button variant="secondary" icon={Trash2} disabled={transition.isPending} onClick={act}>Enviar a papelera</Button>
     </nav>
     {transition.isError && <p role="alert" className="error">{transition.error instanceof TypeError
       ? 'No pudimos confirmar la operación. Actualiza la ficha antes de volver a intentarlo.' : transition.error.message}</p>}

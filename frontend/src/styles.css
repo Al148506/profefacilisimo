@@ -1,5 +1,5 @@
 
-:root { --pf-ink: #173b37; --pf-line: #dfe5d8; --pf-muted: #3c5a4e; --pf-accent: #97b54d; --pf-primary: #234e41; --pf-link: #286354; --pf-tint: #f1f5e6; --pf-border: #c5d1c5; --pf-surface: #f7f8f2; --pf-quiet: #62736b; --pf-danger: #a52d31; --pf-eyebrow: #607448; font-family: system-ui, sans-serif; color: var(--pf-ink); background: #f5f6ef; font-synthesis: none; }
+:root { --pf-ink: #173b37; --pf-line: #dfe5d8; --pf-muted: #3c5a4e; --pf-accent: #97b54d; --pf-primary: #234e41; --pf-link: #286354; --pf-tint: #f1f5e6; --pf-border: #c5d1c5; --pf-surface: #f7f8f2; --pf-quiet: #62736b; --pf-danger: #a52d31; --pf-eyebrow: #607448; --pf-primary-hover: #173d32; --pf-danger-hover: #7e2429; --pf-accent-hover: #86a342; font-family: system-ui, sans-serif; color: var(--pf-ink); background: #f5f6ef; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
 header { max-width: 1200px; margin: auto; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
@@ -20,9 +20,22 @@ input { font: inherit; width: 100%; border: 1px solid var(--pf-border); border-r
 small { font-size: 12px; color: var(--pf-quiet); margin: 6px 0; }
 small.error { min-height: 15px; margin-bottom: 12px; }
 button, .button { font: inherit; font-weight: 600; background: var(--pf-primary); border: 1px solid var(--pf-primary); color: white; padding: 13px 18px; border-radius: 10px; cursor: pointer; text-align: center; text-decoration: none; display: inline-block; }
-button:hover, .button:hover { background: #173d32; }
+button:hover, .button:hover { background: var(--pf-primary-hover); }
 button:disabled { opacity: .65; cursor: not-allowed; }
 button.secondary, .button.secondary { background: transparent; color: var(--pf-primary); }
+/* Button variants and icon layout. The base shape comes from the `button, .button` rule above;
+   each `.pf-btn--*` class only overrides the colour of its meaning, and `.pf-btn` lays out the
+   icon before the label. The `Button` component always adds `pf-btn` plus one variant class. */
+.pf-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; }
+.pf-btn svg { flex: 0 0 auto; }
+.pf-btn--primary:hover { background: var(--pf-primary-hover); }
+.pf-btn--secondary { background: transparent; border-color: var(--pf-border); color: var(--pf-primary); }
+.pf-btn--secondary:hover { background: var(--pf-tint); border-color: var(--pf-primary); }
+.pf-btn--danger { background: var(--pf-danger); border-color: var(--pf-danger); }
+.pf-btn--danger:hover { background: var(--pf-danger-hover); border-color: var(--pf-danger-hover); }
+.pf-btn--accent { background: var(--pf-accent); border-color: var(--pf-accent); color: var(--pf-ink); }
+.pf-btn--accent:hover { background: var(--pf-accent-hover); border-color: var(--pf-accent-hover); }
+.pf-btn:disabled { opacity: .65; cursor: not-allowed; }
 :focus-visible { outline: 3px solid var(--pf-accent); outline-offset: 3px; }
 .error { color: var(--pf-danger); }
 .footnote { text-align: center; font-size: 13px; margin-bottom: 0; }
@@ -73,7 +86,6 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid var(-
 .lesson-navigation, .lesson-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .lesson-actions { margin-top: 16px; }
 .lesson-actions .duplicate-button, .lesson-actions a { margin: 0; }
-button.danger { background: #8c3033; border-color: #8c3033; }
 @media (max-width: 600px) { .lesson-actions { align-items: stretch; flex-direction: column; } }
 
 /* The wizard: one group of fields at a time, so the editor never shows both forms at once. */

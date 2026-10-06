@@ -9,6 +9,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { LogOut, LogIn, UserPlus, RefreshCw, ArrowLeft } from 'lucide-react';
+import { Button } from './components/Button';
 import { initializeAuth, login, logout, register, retryInitialization, useAuth, type User } from './auth';
 import LessonsPage from './lessons/LessonsPage';
 import RouteErrorBoundary from './RouteErrorBoundary';
@@ -25,7 +27,7 @@ function SessionBar({ user }: { user: User }) {
   return <div className="session-bar">
     <p>Sesión iniciada como <strong>{user.email}</strong>.</p>
     {signOut.isError && <p role="alert" className="error">No se pudo cerrar la sesión en el servidor. Vuelve a intentarlo.</p>}
-    <button className="secondary" onClick={() => signOut.mutate()} disabled={signOut.isPending}>{signOut.isPending ? 'Cerrando…' : 'Cerrar sesión'}</button>
+    <Button variant="secondary" icon={LogOut} onClick={() => signOut.mutate()} disabled={signOut.isPending}>{signOut.isPending ? 'Cerrando…' : 'Cerrar sesión'}</Button>
   </div>;
 }
 
@@ -44,7 +46,7 @@ function AuthPage({ registering = false }: { registering?: boolean }) {
   if (registering && mutation.isSuccess) return <section className="card">
     <p className="eyebrow">Todo empieza aquí</p><h1>Tu cuenta está lista</h1>
     <p>Ya puedes entrar a tu espacio de preparación de clases.</p>
-    <Link className="button" to="/login">Iniciar sesión</Link>
+    <Link className="button pf-btn" to="/login"><LogIn aria-hidden="true" size={17} />Iniciar sesión</Link>
   </section>;
   return <section className="card">
     <p className="eyebrow">Tu espacio como profe</p>
@@ -59,7 +61,7 @@ function AuthPage({ registering = false }: { registering?: boolean }) {
       <small id="password-help">{registering ? '12 a 128 caracteres, con mayúscula, minúscula y número.' : 'Usa la contraseña de tu cuenta.'}</small>
       <small id="password-error" className="error">{form.formState.errors.password?.message}</small>
       {mutation.isError && <p role="alert" className="error">{mutation.error instanceof TypeError ? 'No pudimos conectar con el servidor.' : mutation.error.message}</p>}
-      <button disabled={mutation.isPending}>{mutation.isPending ? 'Un momento…' : registering ? 'Crear cuenta' : 'Iniciar sesión'}</button>
+      <Button type="submit" disabled={mutation.isPending} icon={registering ? UserPlus : LogIn}>{mutation.isPending ? 'Un momento…' : registering ? 'Crear cuenta' : 'Iniciar sesión'}</Button>
     </form>
     <p className="footnote">{registering ? '¿Ya tienes cuenta? ' : '¿Primera vez por aquí? '}
       <Link to={registering ? '/login' : '/register'}>{registering ? 'Inicia sesión' : 'Crea una cuenta'}</Link>
@@ -82,10 +84,10 @@ export default function App() {
   const location = useLocation();
   useEffect(() => { void initializeAuth(); }, []);
   return <><header><Link to="/" className="brand"><span aria-hidden="true">pf.</span> Profe Facilísimo</Link><span className="header-note">Menos preparación. Más conversación.</span>{user && <SessionBar user={user} />}</header>
-    <main>{loading ? <p role="status">Preparando tu espacio…</p> : error ? <section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><button onClick={() => void retryInitialization()}>Reintentar</button></section> : <RouteErrorBoundary key={location.pathname}><Routes>
+    <main>{loading ? <p role="status">Preparando tu espacio…</p> : error ? <section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><Button icon={RefreshCw} onClick={() => void retryInitialization()}>Reintentar</Button></section> : <RouteErrorBoundary key={location.pathname}><Routes>
       <Route path="/login" element={<AuthPage key="login" />} />
       <Route path="/register" element={<AuthPage key="register" registering />} />
       <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/trash" element={<Dashboard trash />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /><Route path="/lessons/:id/play" element={<LessonPlayerPage />} /><Route path="/students" element={<StudentsDashboard />} /><Route path="/students/trash" element={<StudentsTrashPage />} /><Route path="/students/new" element={<StudentFormPage />} /><Route path="/students/:id" element={<StudentProfilePage />} /><Route path="/students/:id/edit" element={<StudentFormPage />} /></Route>
-      <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link className="button" to="/">Volver al inicio</Link></section>} />
+      <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link className="button pf-btn" to="/"><ArrowLeft aria-hidden="true" size={17} />Volver al inicio</Link></section>} />
     </Routes></RouteErrorBoundary>}</main><footer>Un espacio para enseñar español, a tu manera.</footer></>;
 }

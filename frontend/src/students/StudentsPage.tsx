@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Pencil, Trash2, RotateCcw, Ban, Search, FilterX, RefreshCw, Eye } from 'lucide-react';
 import type { User } from '../auth';
+import { Button } from '../components/Button';
 import { LEVELS } from '../levels';
 import { listStudents, studentDetailKey, studentListKey, transitionStudent, type StudentFilters, type StudentLevel } from './student-api';
 
@@ -39,7 +41,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
     <p className="eyebrow">Tus estudiantes</p>
     <h1>{trash ? 'Papelera de estudiantes' : 'Mis estudiantes'}</h1>
     <nav className="students-navigation">{trash ? <Link to="/students">Volver a Mis estudiantes</Link> : <>
-      <Link className="button" to="/students/new">Crear estudiante</Link><Link to="/students/trash">Papelera</Link><Link to="/">Mis clases</Link>
+      <Link className="button pf-btn" to="/students/new"><Plus aria-hidden="true" size={17} />Crear estudiante</Link><Link to="/students/trash">Papelera</Link><Link to="/">Mis clases</Link>
     </>}</nav>
     <p>{trash
       ? 'Restaura tus estudiantes o elimínalos definitivamente.'
@@ -54,17 +56,17 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
           {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
       </div>
-      <button type="submit">Buscar</button>
-      <button className="secondary" type="button" onClick={clearFilters}>Limpiar filtros</button>
+      <Button type="submit" icon={Search}>Buscar</Button>
+      <Button variant="secondary" type="button" icon={FilterX} onClick={clearFilters}>Limpiar filtros</Button>
     </form>}
     {transition.isError && <div role="alert" className="error"><p>{transition.error instanceof TypeError
       ? 'No pudimos confirmar la operación. Actualiza el listado antes de volver a intentarlo.' : transition.error.message}</p>
-      <button disabled={students.isFetching} onClick={() => void students.refetch()}>Actualizar listado</button></div>}
+      <Button icon={RefreshCw} disabled={students.isFetching} onClick={() => void students.refetch()}>Actualizar listado</Button></div>}
     <div aria-live="polite" aria-busy={students.isFetching}>
       {students.isPending && <p role="status">Cargando tus estudiantes…</p>}
       {students.isError && <div role="alert" className="error">
         <p>No pudimos cargar tus estudiantes.</p>
-        <button type="button" onClick={() => void students.refetch()} disabled={students.isFetching}>Reintentar estudiantes</button>
+        <Button type="button" icon={RefreshCw} onClick={() => void students.refetch()} disabled={students.isFetching}>Reintentar estudiantes</Button>
       </div>}
       {students.isSuccess && <>
         {students.isFetching && <p role="status">Actualizando estudiantes…</p>}
@@ -79,16 +81,16 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
               <p className="student-assigned-count">{student.assignedLessonCount === 1
                 ? '1 clase asignada' : student.assignedLessonCount + ' clases asignadas'}</p>
               <div className="student-actions">{!trash && <>
-                <Link className="button" to={'/students/' + student.id}>Ver ficha</Link>
-                <Link className="button secondary" to={'/students/' + student.id + '/edit'} aria-label={'Editar ' + student.name}>Editar</Link>
-                <button className="secondary" disabled={transition.isPending}
-                  aria-label={'Enviar a papelera ' + student.name} onClick={() => act(student.id, student.name, 'trash')}>Enviar a papelera</button>
+                <Link className="button pf-btn" to={'/students/' + student.id}><Eye aria-hidden="true" size={17} />Ver ficha</Link>
+                <Link className="button secondary pf-btn" to={'/students/' + student.id + '/edit'} aria-label={'Editar ' + student.name}><Pencil aria-hidden="true" size={17} />Editar</Link>
+                <Button variant="secondary" disabled={transition.isPending} icon={Trash2}
+                  aria-label={'Enviar a papelera ' + student.name} onClick={() => act(student.id, student.name, 'trash')}>Enviar a papelera</Button>
               </>}
                 {trash && <>
-                  <button className="secondary" disabled={transition.isPending}
-                    aria-label={'Restaurar ' + student.name} onClick={() => act(student.id, student.name, 'restore')}>Restaurar</button>
-                  <button className="danger" disabled={transition.isPending}
-                    aria-label={'Eliminar definitivamente ' + student.name} onClick={() => act(student.id, student.name, 'delete')}>Eliminar definitivamente</button>
+                  <Button variant="accent" disabled={transition.isPending} icon={RotateCcw}
+                    aria-label={'Restaurar ' + student.name} onClick={() => act(student.id, student.name, 'restore')}>Restaurar</Button>
+                  <Button variant="danger" disabled={transition.isPending} icon={Ban}
+                    aria-label={'Eliminar definitivamente ' + student.name} onClick={() => act(student.id, student.name, 'delete')}>Eliminar definitivamente</Button>
                 </>}
                 {transition.isPending && transition.variables.id === student.id && <span role="status">Procesando…</span>}
               </div></li>)}</ul>}

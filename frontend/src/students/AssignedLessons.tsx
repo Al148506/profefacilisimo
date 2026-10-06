@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, Unlink } from 'lucide-react';
+import { Button } from '../components/Button';
 import { formatLessonDuration } from '../lessons/lesson-duration';
 import { listLessons, type LessonListItem } from '../lessons/lesson-api';
 import { assignLessonToStudent, unassignLessonFromStudent, type StudentDetails } from './student-api';
@@ -61,7 +63,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
 
     {candidatesQuery.isError && <div role="alert" className="error">
       <p>No pudimos cargar tus clases.</p>
-      <button disabled={candidatesQuery.isFetching} onClick={() => void candidatesQuery.refetch()}>Reintentar clases</button>
+      <Button disabled={candidatesQuery.isFetching} icon={RefreshCw} onClick={() => void candidatesQuery.refetch()}>Reintentar clases</Button>
     </div>}
 
     {assigned.length === 0
@@ -75,11 +77,11 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
           <div className="lesson-actions">
             {lesson.inTrash
               ? <small>Restaura la clase para poder quitar la asignación.</small>
-              : <button className="secondary" disabled={busy} aria-label={'Quitar asignación de ' + lesson.title}
-                onClick={() => unassign.mutate({ lessonId: lesson.id })}>Quitar asignación</button>}
+              : <Button variant="secondary" disabled={busy} icon={Unlink} aria-label={'Quitar asignación de ' + lesson.title}
+                onClick={() => unassign.mutate({ lessonId: lesson.id })}>Quitar asignación</Button>}
             {pendingUnassign === lesson.id && <span role="status">Quitando…</span>}
             {failedUnassign?.lessonId === lesson.id && <span role="alert" className="error">{failedUnassign.message}
-              <button className="secondary" onClick={() => unassign.mutate({ lessonId: lesson.id })}>Reintentar</button></span>}
+              <Button variant="secondary" icon={RefreshCw} onClick={() => unassign.mutate({ lessonId: lesson.id })}>Reintentar</Button></span>}
           </div>
         </li>)}
       </ul>}
@@ -96,7 +98,7 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
           </select>
           {assign.isPending && <span role="status">Asignando…</span>}
           {assignFailure && <span role="alert" className="error">{assignFailure}
-            <button className="secondary" onClick={() => assign.variables && assign.mutate(assign.variables)}>Reintentar</button></span>}
+            <Button variant="secondary" icon={RefreshCw} onClick={() => assign.variables && assign.mutate(assign.variables)}>Reintentar</Button></span>}
         </>}
     </div>
   </section>;

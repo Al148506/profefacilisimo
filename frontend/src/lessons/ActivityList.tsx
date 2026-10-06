@@ -1,3 +1,5 @@
+import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Button } from '../components/Button';
 import { ACTIVITY_TYPE_LABELS, type ActivityDraft } from './lesson-schema';
 
 type ActivityListProps = {
@@ -41,13 +43,13 @@ export default function ActivityList({ activities, selectedKey, errors, onSelect
             <span className="activity-duration">{activity.duration === null ? 'Sin duración' : activity.duration + ' min'}</span>
           </button>
           <div className="activity-order">
-            <button type="button" className="secondary" disabled={index === 0}
-              aria-label={'Subir ' + name} onClick={() => onMove(activity.key, -1)}>Subir</button>
-            <button type="button" className="secondary" disabled={index === activities.length - 1}
-              aria-label={'Bajar ' + name} onClick={() => onMove(activity.key, 1)}>Bajar</button>
+            <Button variant="secondary" type="button" icon={ChevronUp} disabled={index === 0}
+              aria-label={'Subir ' + name} onClick={() => onMove(activity.key, -1)}>Subir</Button>
+            <Button variant="secondary" type="button" icon={ChevronDown} disabled={index === activities.length - 1}
+              aria-label={'Bajar ' + name} onClick={() => onMove(activity.key, 1)}>Bajar</Button>
           </div>
-          <button type="button" className="secondary activity-remove" aria-label={'Quitar ' + name}
-            onClick={() => onRemove(activity.key)}>Quitar</button>
+          <Button variant="secondary" type="button" className="activity-remove" icon={Trash2} aria-label={'Quitar ' + name}
+            onClick={() => onRemove(activity.key)}>Quitar</Button>
         </div>
         {error && <p className="error activity-error" id={errorId}>{error}</p>}
       </li>;

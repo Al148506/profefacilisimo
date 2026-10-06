@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { Plus, X, ArrowLeft, ArrowRight, Save, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth';
+import { Button } from '../components/Button';
 import { LEVELS } from '../levels';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
@@ -244,7 +246,7 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
                 {ACTIVITY_TYPES.map((type) => <option key={type} value={type}>{ACTIVITY_TYPE_LABELS[type]}</option>)}
               </select>
             </div>
-            <button type="button" className="secondary" onClick={addActivity}>Agregar actividad</button>
+            <Button variant="secondary" type="button" icon={Plus} onClick={addActivity}>Agregar actividad</Button>
           </div>
           <ActivityList activities={activities} selectedKey={selectedKey} errors={listErrors}
             onSelect={setSelectedKey} onRemove={removeActivity} onMove={moveActivity} />
@@ -261,19 +263,19 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       <div className="editor-actions">
         {step === 'info'
           ? <Fragment key="info">
-            <button type="button" className="secondary" disabled={saving} onClick={back}>Cancelar</button>
-            <button type="button" disabled={saving} onClick={() => void goToActivities()}>Continuar</button>
+            <Button variant="secondary" type="button" icon={X} disabled={saving} onClick={back}>Cancelar</Button>
+            <Button type="button" icon={ArrowRight} disabled={saving} onClick={() => void goToActivities()}>Continuar</Button>
           </Fragment>
           : <Fragment key="activities">
-            <button type="button" className="secondary" disabled={saving} onClick={goToInfo}>Atrás</button>
-            <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar clase'}</button>
+            <Button variant="secondary" type="button" icon={ArrowLeft} disabled={saving} onClick={goToInfo}>Atrás</Button>
+            <Button type="submit" icon={Save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar clase'}</Button>
           </Fragment>}
       </div>
     </form>
     {/* Outside the <form> and outside the draft on purpose: assigning a student must never mark the
         lesson as modified nor require saving first, so the section reads and writes on its own. */}
     {initial && <AssignedStudents lessonId={initial.id} userId={userId} />}
-    <button className="secondary editor-back" disabled={saving} onClick={back}>Volver a Mis clases</button>
+    <Button variant="secondary" className="editor-back" icon={ArrowLeft} disabled={saving} onClick={back}>Volver a Mis clases</Button>
   </section>;
 }
 
@@ -288,8 +290,8 @@ export default function LessonEditorPage() {
   if (!user) return null;
   if (!id) return <LessonForm key={user.id + '-new'} userId={user.id} />;
   if (!query.data) return <section className="card">
-    {query.isPending ? <p role="status">Cargando clase…</p> : <div role="alert" className="error"><p>{query.error?.message}</p><button disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button></div>}
-    <Link className="button secondary" to="/">Volver a Mis clases</Link>
+    {query.isPending ? <p role="status">Cargando clase…</p> : <div role="alert" className="error"><p>{query.error?.message}</p><Button icon={RefreshCw} disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</Button></div>}
+    <Link className="button secondary pf-btn" to="/"><ArrowLeft aria-hidden="true" size={17} />Volver a Mis clases</Link>
   </section>;
   return <LessonForm key={user.id + '-' + id} userId={user.id} initial={query.data} />;
 }
