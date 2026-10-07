@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Save, RefreshCw } from 'lucide-react';
 import { LEVELS } from '../levels';
+import { Button } from '../components/Button';
 import { useAuth } from '../auth';
 import { notifyStudentSaved } from '../notifications';
 import { emptyStudentValues, studentSchema, studentValuesFrom, toSaveStudentValues, type StudentFormValues, type StudentValues } from './student-schema';
@@ -93,9 +95,9 @@ function StudentForm({ userId, initial }: { userId: string; initial?: StudentDet
         : mutation.error.message}</p>}
       {/* The saved confirmation is the `notifyStudentSaved` alert: one channel per save, the same
           criterion the editor applies. */}
-      <button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
+      <Button type="submit" icon={Save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
     </form>
-    <button className="secondary" disabled={saving} onClick={back}>Volver a Mis estudiantes</button>
+    <Button variant="secondary" icon={ArrowLeft} disabled={saving} onClick={back}>Volver a Mis estudiantes</Button>
   </section>;
 }
 
@@ -110,8 +112,8 @@ export default function StudentFormPage() {
   if (!user) return null;
   if (!id) return <StudentForm key={user.id + '-new'} userId={user.id} />;
   if (!query.data) return <section className="card">
-    {query.isPending ? <p role="status">Cargando estudiante…</p> : <div role="alert" className="error"><p>{query.error?.message}</p><button disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</button></div>}
-    <Link className="button secondary" to="/students">Volver a Mis estudiantes</Link>
+    {query.isPending ? <p role="status">Cargando estudiante…</p> : <div role="alert" className="error"><p>{query.error?.message}</p><Button icon={RefreshCw} disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</Button></div>}
+    <Link className="button secondary pf-btn" to="/students"><ArrowLeft aria-hidden="true" size={17} />Volver a Mis estudiantes</Link>
   </section>;
   return <StudentForm key={user.id + '-' + id} userId={user.id} initial={query.data} />;
 }

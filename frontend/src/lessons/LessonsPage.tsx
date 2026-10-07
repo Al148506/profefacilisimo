@@ -1,7 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Play, Pencil, Copy, Plus, Trash2, RotateCcw, Ban, Search, FilterX, RefreshCw } from 'lucide-react';
 import type { User } from '../auth';
+import { Button } from '../components/Button';
 import { LEVELS } from '../levels';
 import { transitionLesson, duplicateLesson, lessonDetailKey, lessonListKey, listLessons, type LessonFilters, type LessonLevel } from './lesson-api';
 import { formatLessonDuration } from './lesson-duration';
@@ -48,7 +50,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
     <p className="eyebrow">Tu espacio como profe</p>
     <h1>{trash ? 'Papelera' : 'Mis clases'}</h1>
     <nav className="lesson-navigation">{trash ? <Link to="/">Volver a Mis clases</Link> : <>
-      <Link className="button" to="/lessons/new">Crear clase</Link><Link to="/lessons/trash">Papelera</Link><Link to="/students">Estudiantes</Link>
+      <Link className="button pf-btn" to="/lessons/new"><Plus aria-hidden="true" size={17} />Crear clase</Link><Link to="/lessons/trash">Papelera</Link><Link to="/students">Estudiantes</Link>
     </>}</nav>
     <p>{trash ? 'Restaura tus clases o elimínalas definitivamente.' : 'Encuentra tus clases por título o nivel.'}</p>
     {!trash && <form className="lesson-filters" onSubmit={(event) => { event.preventDefault(); setFilters({ search: search.trim(), level }); }}>
@@ -61,12 +63,12 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
           {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
       </div>
-      <button type="submit">Buscar</button>
-      <button className="secondary" type="button" onClick={clearFilters}>Limpiar filtros</button>
+      <Button type="submit" icon={Search}>Buscar</Button>
+      <Button variant="secondary" type="button" icon={FilterX} onClick={clearFilters}>Limpiar filtros</Button>
     </form>}
     {transition.isError && <div role="alert" className="error"><p>{transition.error instanceof TypeError
       ? 'No pudimos confirmar la operación. Actualiza el listado antes de volver a intentarlo.' : transition.error.message}</p>
-      <button disabled={lessons.isFetching} onClick={() => void lessons.refetch()}>Actualizar listado</button></div>}
+      <Button icon={RefreshCw} disabled={lessons.isFetching} onClick={() => void lessons.refetch()}>Actualizar listado</Button></div>}
     {duplicate.isError && <p role="alert" className="error">{duplicate.error instanceof TypeError
       ? 'No pudimos confirmar la copia. Actualiza el listado antes de volver a duplicar para evitar copias repetidas.'
       : duplicate.error.message}</p>}
@@ -74,7 +76,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
       {lessons.isPending && <p role="status">Cargando tus clases…</p>}
       {lessons.isError && <div role="alert" className="error">
         <p>No pudimos cargar tus clases.</p>
-        <button type="button" onClick={() => void lessons.refetch()} disabled={lessons.isFetching}>Reintentar clases</button>
+        <Button type="button" icon={RefreshCw} onClick={() => void lessons.refetch()} disabled={lessons.isFetching}>Reintentar clases</Button>
       </div>}
       {lessons.isSuccess && <>
         {lessons.isFetching && <p role="status">Actualizando clases…</p>}
@@ -84,17 +86,18 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
               {!trash && !filtered && <p><Link to="/lessons/new">Crear clase</Link></p>}
             </>
           : <ul className="lesson-list">{lessons.data.map((lesson) =>
-            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p>{!trash && <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>}<div className="lesson-actions">{!trash && <><Link className="button" to={"/lessons/" + lesson.id + "/play"}>Iniciar clase</Link>
-              <Link className="button secondary" to={"/lessons/" + lesson.id + "/edit"} aria-label={'Editar ' + lesson.title}>Editar clase</Link>
-              <button className="secondary duplicate-button" type="button" disabled={busy}
+            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p>{!trash && <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>}<div className="lesson-actions">{!trash && <><Link className="button pf-btn" to={"/lessons/" + lesson.id + "/play"}><Play aria-hidden="true" size={17} />Iniciar clase</Link>
+              <Link className="button pf-btn pf-btn--warning" to={"/lessons/" + lesson.id + "/edit"} aria-label={'Editar ' + lesson.title}><Pencil aria-hidden="true" size={17} />Editar clase</Link>
+              <Button variant="accent" className="duplicate-button" type="button" disabled={busy}
+                icon={Copy}
                 aria-label={'Duplicar ' + lesson.title} onClick={() => duplicate.mutate(lesson.id)}>
                 {duplicate.isPending && duplicate.variables === lesson.id ? 'Duplicando…' : 'Duplicar'}
-              </button>
-              <button className="secondary" disabled={busy} aria-label={'Enviar a papelera ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'trash')}>Enviar a papelera</button>
+              </Button>
+              <Button variant="danger" disabled={busy} icon={Trash2} aria-label={'Enviar a papelera ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'trash')}>Enviar a papelera</Button>
               </>}
               {trash && <>
-                <button className="secondary" disabled={busy} aria-label={'Restaurar ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'restore')}>Restaurar</button>
-                <button className="danger" disabled={busy} aria-label={'Eliminar definitivamente ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'delete')}>Eliminar definitivamente</button>
+                <Button variant="accent" disabled={busy} icon={RotateCcw} aria-label={'Restaurar ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'restore')}>Restaurar</Button>
+                <Button variant="danger" disabled={busy} icon={Ban} aria-label={'Eliminar definitivamente ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'delete')}>Eliminar definitivamente</Button>
               </>}
               {transition.isPending && transition.variables.id === lesson.id && <span role="status">Procesando…</span>}
               </div></li>)}</ul>}
