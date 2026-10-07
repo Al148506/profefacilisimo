@@ -93,7 +93,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
                 aria-label={'Duplicar ' + lesson.title} onClick={() => duplicate.mutate(lesson.id)}>
                 {duplicate.isPending && duplicate.variables === lesson.id ? 'Duplicando…' : 'Duplicar'}
               </Button>
-              <Button variant="secondary" disabled={busy} icon={Trash2} aria-label={'Enviar a papelera ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'trash')}>Enviar a papelera</Button>
+              <Button variant="danger" disabled={busy} icon={Trash2} aria-label={'Enviar a papelera ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'trash')}>Enviar a papelera</Button>
               </>}
               {trash && <>
                 <Button variant="accent" disabled={busy} icon={RotateCcw} aria-label={'Restaurar ' + lesson.title} onClick={() => act(lesson.id, lesson.title, 'restore')}>Restaurar</Button>

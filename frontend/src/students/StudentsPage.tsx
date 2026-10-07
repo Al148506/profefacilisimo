@@ -83,7 +83,7 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
               <div className="student-actions">{!trash && <>
                 <Link className="button pf-btn" to={'/students/' + student.id}><Eye aria-hidden="true" size={17} />Ver ficha</Link>
                 <Link className="button pf-btn pf-btn--warning" to={'/students/' + student.id + '/edit'} aria-label={'Editar ' + student.name}><Pencil aria-hidden="true" size={17} />Editar</Link>
-                <Button variant="secondary" disabled={transition.isPending} icon={Trash2}
+                <Button variant="danger" disabled={transition.isPending} icon={Trash2}
                   aria-label={'Enviar a papelera ' + student.name} onClick={() => act(student.id, student.name, 'trash')}>Enviar a papelera</Button>
               </>}
                 {trash && <>

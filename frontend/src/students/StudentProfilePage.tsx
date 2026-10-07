@@ -51,7 +51,7 @@ export default function StudentProfilePage() {
     <nav className="students-navigation">
       <Link to="/students">Volver a Mis estudiantes</Link>
       <Link className="button pf-btn pf-btn--warning" to={'/students/' + student.id + '/edit'}><Pencil aria-hidden="true" size={17} />Editar</Link>
-      <Button variant="secondary" icon={Trash2} disabled={transition.isPending} onClick={act}>Enviar a papelera</Button>
+      <Button variant="danger" icon={Trash2} disabled={transition.isPending} onClick={act}>Enviar a papelera</Button>
     </nav>
     {transition.isError && <p role="alert" className="error">{transition.error instanceof TypeError
       ? 'No pudimos confirmar la operación. Actualiza la ficha antes de volver a intentarlo.' : transition.error.message}</p>}
