@@ -2,9 +2,9 @@ import { authenticatedFetch } from '../auth';
 import type { ActivityContent, ActivityType, LessonValues } from './lesson-schema';
 
 export type LessonLevel = 'A2' | 'B1' | 'B2';
-export type LessonFilters = { search: string; level: LessonLevel | '' };
+export type LessonFilters = { search: string; level: LessonLevel | ''; topic: string };
 export type LessonListItem = {
-  id: string; title: string; level: LessonLevel; topic: string;
+  id: string; title: string; level: LessonLevel; topic: string | null;
   /** Persisted total; null means at least one activity still has no duration. */
   estimatedDuration: number | null;
   updatedAt: string; deletedAt: string | null;
@@ -33,12 +33,13 @@ export type LessonActivityInput = {
 export type SaveLessonValues = LessonValues & { activities: LessonActivityInput[] };
 
 export const lessonListKey = (userId: string, filters: LessonFilters, state: 'active' | 'trash' = 'active') =>
-  ['lessons', userId, state, state === 'trash' ? '' : filters.search.trim(), state === 'trash' ? '' : filters.level] as const;
+  ['lessons', userId, state, state === 'trash' ? '' : filters.search.trim(), state === 'trash' ? '' : filters.level, state === 'trash' ? '' : filters.topic.trim()] as const;
 
 export async function listLessons(filters: LessonFilters, signal?: AbortSignal, state: 'active' | 'trash' = 'active'): Promise<LessonListItem[]> {
   const query = new URLSearchParams({ state });
   if (state === 'active' && filters.search.trim()) query.set('search', filters.search.trim());
   if (state === 'active' && filters.level) query.set('level', filters.level);
+  if (state === 'active' && filters.topic.trim()) query.set('topic', filters.topic.trim());
   const response = await authenticatedFetch('/api/lessons?' + query, { signal });
   if (!response.ok) {
     if (response.status === 401) throw new Error('Tu sesión ha caducado. Vuelve a iniciar sesión.');

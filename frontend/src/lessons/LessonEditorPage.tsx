@@ -16,10 +16,11 @@ import { notifyLessonSaveFailed, notifyLessonSaved } from '../notifications';
 import {
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, activityDraftSchema, activityIssueIndex, createDraft, draftFingerprint,
   draftFromSaved, lessonDraftSchema, lessonSchema, toActivityInput,
-  type ActivityDraft, type ActivityType, type LessonValues,
+  type ActivityDraft, type ActivityType, type LessonValues, type LessonFormValues,
 } from './lesson-schema';
 import { LessonSaveError, getLesson, lessonDetailKey, saveLesson, type LessonDetails, type SaveLessonValues } from './lesson-api';
 import { calculateTotalDuration, formatLessonDuration } from './lesson-duration';
+import { COMMON_TOPICS } from './lesson-topics';
 
 type DraftErrors = Record<string, ActivityFieldErrors>;
 
@@ -81,10 +82,10 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
   const navigate = useNavigate();
   const client = useQueryClient();
   const bypassBlocker = useRef(false);
-  const form = useForm<LessonValues>({
+  const form = useForm<LessonFormValues, unknown, LessonValues>({
     resolver: zodResolver(lessonSchema),
     defaultValues: initial
-      ? { title: initial.title, level: initial.level, topic: initial.topic, objective: initial.objective }
+      ? { title: initial.title, level: initial.level, topic: initial.topic ?? '', objective: initial.objective }
       : { title: '', level: 'A2', topic: '', objective: '' },
   });
   // The step lives in state, not in the URL: the wizard is local to the draft, and a plain reload
@@ -109,7 +110,7 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
     onSuccess: (saved) => {
       const canonical = saved.activities.map(draftFromSaved);
       const index = activities.findIndex((activity) => activity.key === selectedKey);
-      form.reset({ title: saved.title, level: saved.level, topic: saved.topic, objective: saved.objective });
+      form.reset({ title: saved.title, level: saved.level, topic: saved.topic ?? '', objective: saved.objective });
       // Only after the server confirms are the local keys replaced by the returned Ids, and only
       // then the pending changes indicator is cleared.
       setActivities(canonical);
@@ -229,8 +230,20 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
             {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
           </select>
           <small className="error" id="level-error">{form.formState.errors.level?.message}</small>
-          <label htmlFor="topic">Tema</label>
-          <input id="topic" {...form.register('topic')} aria-invalid={!!form.formState.errors.topic} aria-describedby="topic-error" />
+          <label htmlFor="topic">Tema <span className="optional">(opcional)</span></label>
+          <input
+            id="topic"
+            list="common-topics"
+            placeholder="Ej. Viajes y turismo, Gastronomía…"
+            {...form.register('topic')}
+            aria-invalid={!!form.formState.errors.topic}
+            aria-describedby="topic-error"
+          />
+          <datalist id="common-topics">
+            {COMMON_TOPICS.map((topic) => (
+              <option key={topic} value={topic} />
+            ))}
+          </datalist>
           <small className="error" id="topic-error">{form.formState.errors.topic?.message}</small>
           <label htmlFor="objective">Objetivo</label>
           <textarea id="objective" rows={5} {...form.register('objective')} aria-invalid={!!form.formState.errors.objective} aria-describedby="objective-error" />

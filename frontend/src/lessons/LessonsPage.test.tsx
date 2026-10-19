@@ -27,12 +27,13 @@ it('shows loading followed by initial empty state', async () => {
   const live = document.querySelector('[aria-live="polite"]') as HTMLElement;
   expect(within(live).getByRole('link', { name: 'Crear clase' })).toHaveAttribute('href', '/lessons/new');
 });
-it('shows title, level and topic in server order', async () => {
-  vi.mocked(listLessons).mockResolvedValue([lesson, { ...lesson, id: 'l2', title: 'Segunda' }]);
+it('shows title, level and topic in server order, omitting topic paragraph when null', async () => {
+  vi.mocked(listLessons).mockResolvedValue([lesson, { ...lesson, id: 'l2', title: 'Segunda', topic: null }]);
   page();
   expect(await screen.findByRole('heading', { name: 'Viajes' })).toBeInTheDocument();
   expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('ViajesB1Vacaciones');
   expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('Segunda');
+  expect(screen.getAllByRole('listitem')[1].querySelector('.lesson-topic')).toBeNull();
 });
 it('shows the calculated total, 0 for an empty lesson, and the incomplete label', async () => {
   vi.mocked(listLessons).mockResolvedValue([
@@ -59,15 +60,17 @@ it('combines trimmed local filters and clears them without changing the URL', as
   const url = window.location.href;
   await userEvent.type(screen.getByLabelText('Buscar por título'), ' viaje ');
   await userEvent.selectOptions(screen.getByLabelText('Nivel'), 'B2');
+  await userEvent.selectOptions(screen.getByLabelText('Tema'), 'Viajes y turismo');
   expect(listLessons).toHaveBeenCalledTimes(1);
   await userEvent.click(screen.getByRole('button', { name: 'Buscar' }));
   expect(await screen.findByText('No hay clases que coincidan con estos filtros.')).toBeInTheDocument();
-  expect(listLessons).toHaveBeenLastCalledWith({ search: 'viaje', level: 'B2' }, expect.any(AbortSignal), 'active');
+  expect(listLessons).toHaveBeenLastCalledWith({ search: 'viaje', level: 'B2', topic: 'Viajes y turismo' }, expect.any(AbortSignal), 'active');
   expect(window.location.href).toBe(url);
   await userEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
   expect(await screen.findByText('Aún no tienes clases.')).toBeInTheDocument();
   expect(screen.getByLabelText('Buscar por título')).toHaveValue('');
   expect(screen.getByLabelText('Nivel')).toHaveValue('');
+  expect(screen.getByLabelText('Tema')).toHaveValue('');
 });
 it('retries errors only when requested', async () => {
   vi.mocked(listLessons).mockRejectedValueOnce(new Error('Offline')).mockResolvedValue([lesson]);
@@ -97,8 +100,8 @@ it('offers the player even when the lesson has no activities yet', async () => {
   expect(await screen.findByRole('link', { name: 'Iniciar clase' })).toHaveAttribute('href', '/lessons/l1/play');
 });
 it('keys cache by user, state and effective filters', () => {
-  expect(lessonListKey('u1', { search: ' viaje ', level: 'B1' })).toEqual(['lessons', 'u1', 'active', 'viaje', 'B1']);
-  expect(lessonListKey('u1', { search: '', level: '' })).not.toEqual(lessonListKey('u2', { search: '', level: '' }));
+  expect(lessonListKey('u1', { search: ' viaje ', level: 'B1', topic: ' Viajes y turismo ' })).toEqual(['lessons', 'u1', 'active', 'viaje', 'B1', 'Viajes y turismo']);
+  expect(lessonListKey('u1', { search: '', level: '', topic: '' })).not.toEqual(lessonListKey('u2', { search: '', level: '', topic: '' }));
 });
 it('disables duplicate while pending and opens the copy only after success', async () => {
   vi.mocked(listLessons).mockResolvedValue([lesson]);

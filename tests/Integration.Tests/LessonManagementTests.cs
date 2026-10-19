@@ -142,6 +142,61 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
         Assert.Equal(3, (await List(client, "?search=%20&level=")).Length);
     }
 
+    [Fact]
+    public async Task TopicFilterIsCaseInsensitiveAndCombinesWithLevelAndSearch()
+    {
+        using var scope = fixture.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var owner = Guid.NewGuid();
+        db.Users.Add(new AppUser { Id = owner, UserName = owner.ToString() });
+        var l1 = new Lesson(owner, "Clase A", LessonLevel.B1, "Viajes y turismo", "Obj 1");
+        var l2 = new Lesson(owner, "Clase B", LessonLevel.B2, "Viajes y turismo", "Obj 2");
+        var l3 = new Lesson(owner, "Clase C", LessonLevel.B1, "Gastronomía", "Obj 3");
+        var l4 = new Lesson(owner, "Clase D", LessonLevel.B1, null, "Obj 4");
+        db.Lessons.AddRange(l1, l2, l3, l4);
+        await db.SaveChangesAsync();
+
+        using var client = Client(owner.ToString());
+
+        // Single topic filter (case insensitive)
+        var topicList = await List(client, "?topic=viajes%20y%20turismo");
+        Assert.Equal(2, topicList.Length);
+
+        // Topic + Level combined
+        var topicLevelList = await List(client, "?topic=Viajes%20y%20turismo&level=B1");
+        Assert.Equal(l1.Id, Assert.Single(topicLevelList).Id);
+
+        // Topic + Search combined
+        var topicSearchList = await List(client, "?topic=Gastronom%C3%ADa&search=Clase%20C");
+        Assert.Equal(l3.Id, Assert.Single(topicSearchList).Id);
+
+        // Without topic filter: all 4 lessons returned, including the one without topic
+        var allList = await List(client);
+        Assert.Equal(4, allList.Length);
+        Assert.Contains(allList, x => x.Topic is null);
+    }
+
+    [Fact]
+    public async Task CreateLessonWithNullOrWhitespaceTopicPersistsNull()
+    {
+        var (owner, _) = await Seed();
+        using var client = Client(owner.ToString());
+        var body = new SaveLessonRequest("Clase Sin Tema", "B1", null, "Objetivo de la clase", null);
+        var response = await client.PostAsJsonAsync("/api/lessons", body);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = await response.Content.ReadFromJsonAsync<LessonDetailsDto>();
+        Assert.NotNull(created);
+        Assert.Null(created.Topic);
+
+        // Also test with empty string
+        var bodyEmpty = new SaveLessonRequest("Clase Tema Vacio", "A2", "   ", "Objetivo", null);
+        var responseEmpty = await client.PostAsJsonAsync("/api/lessons", bodyEmpty);
+        Assert.Equal(HttpStatusCode.Created, responseEmpty.StatusCode);
+        var createdEmpty = await responseEmpty.Content.ReadFromJsonAsync<LessonDetailsDto>();
+        Assert.NotNull(createdEmpty);
+        Assert.Null(createdEmpty.Topic);
+    }
+
     [Theory]
     [InlineData("?state=unknown", "state")]
     [InlineData("?state=", "state")]
@@ -285,9 +340,12 @@ public class LessonManagementTests(ApiFixture fixture) : IClassFixture<ApiFixtur
 
     public static IEnumerable<object?[]> InvalidSaveFields()
     {
-        foreach (var field in new[] { "title", "topic", "objective" })
+        // title and objective are required
+        foreach (var field in new[] { "title", "objective" })
         foreach (var value in new string?[] { null, "", "   ", new('x', field == "objective" ? 2001 : 201) })
             yield return [field, value];
+        // topic is optional but cannot exceed 200 characters
+        yield return ["topic", new string('x', 201)];
         foreach (var value in new string?[] { null, "", "B3", "b1", "0" })
             yield return ["level", value];
     }

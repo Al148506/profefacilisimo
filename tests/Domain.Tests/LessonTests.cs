@@ -78,25 +78,52 @@ public class LessonTests
 
     public static IEnumerable<object?[]> InvalidMetadata()
     {
-        foreach (var field in new[] { 0, 1, 2 })
+        // Title (field 0) and Objective (field 2) are required. Topic (field 1) is optional.
+        foreach (var field in new[] { 0, 2 })
         foreach (var invalid in new string?[] { null, "", "   ", new('x', field == 2 ? 2001 : 201) })
         {
             string?[] values = ["Title", "Topic", "Objective"];
             values[field] = invalid;
             yield return [values[0], LessonLevel.B1, values[1], values[2]];
         }
+        // Topic cannot exceed 200 characters.
+        yield return ["Title", LessonLevel.B1, new string('x', 201), "Objective"];
         yield return ["Title", (LessonLevel)99, "Topic", "Objective"];
     }
 
     [Theory]
     [MemberData(nameof(InvalidMetadata))]
-    public void InvalidMetadataIsRejectedWithoutPartialUpdate(string title, LessonLevel level, string topic, string objective)
+    public void InvalidMetadataIsRejectedWithoutPartialUpdate(string title, LessonLevel level, string? topic, string objective)
     {
         Assert.Throws<ArgumentException>(() => new Lesson(Guid.NewGuid(), title, level, topic, objective));
         var lesson = Create();
         var before = (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.UpdatedAt);
         Assert.Throws<ArgumentException>(() => lesson.UpdateMetadata(title, level, topic, objective));
         Assert.Equal(before, (lesson.Title, lesson.Level, lesson.Topic, lesson.Objective, lesson.UpdatedAt));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TopicIsOptionalAndNormalizesToNull(string? topic)
+    {
+        var lesson = new Lesson(Guid.NewGuid(), "Título", LessonLevel.B1, topic, "Objetivo");
+        Assert.Null(lesson.Topic);
+
+        lesson.UpdateMetadata("Título nuevo", LessonLevel.A2, "Tema con valor", "Objetivo nuevo");
+        Assert.Equal("Tema con valor", lesson.Topic);
+
+        lesson.UpdateMetadata("Título nuevo", LessonLevel.A2, topic, "Objetivo nuevo");
+        Assert.Null(lesson.Topic);
+    }
+
+    [Fact]
+    public void DuplicatePreservesNullTopic()
+    {
+        var lesson = new Lesson(Guid.NewGuid(), "Viajes", LessonLevel.B1, null, "Objetivo");
+        var copy = lesson.Duplicate();
+        Assert.Null(copy.Topic);
     }
 
     [Theory]
@@ -109,6 +136,7 @@ public class LessonTests
             new string('s', 200), new string('o', 2000));
         lesson.UpdateMetadata(lesson.Title, level, lesson.Topic, lesson.Objective);
         Assert.Equal(200, lesson.Title.Length);
+        Assert.NotNull(lesson.Topic);
         Assert.Equal(200, lesson.Topic.Length);
         Assert.Equal(2000, lesson.Objective.Length);
         Assert.Equal(0, lesson.EstimatedDuration);
