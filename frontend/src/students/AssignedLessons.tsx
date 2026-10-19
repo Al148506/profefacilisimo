@@ -20,8 +20,8 @@ export default function AssignedLessons({ student, userId }: { student: StudentD
   const assignedIds = new Set(assigned.map((lesson) => lesson.id));
 
   const candidatesQuery = useQuery({
-    queryKey: ['lessons', userId, ACTIVE, '', ''],
-    queryFn: ({ signal }) => listLessons({ search: '', level: '' }, signal, ACTIVE),
+    queryKey: ['lessons', userId, ACTIVE, '', '', ''],
+    queryFn: ({ signal }) => listLessons({ search: '', level: '', topic: '' }, signal, ACTIVE),
     retry: false,
   });
   const candidates = (candidatesQuery.data ?? []).filter((lesson: LessonListItem) => !assignedIds.has(lesson.id));

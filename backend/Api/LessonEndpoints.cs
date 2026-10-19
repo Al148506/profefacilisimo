@@ -21,7 +21,7 @@ public static class LessonEndpoints
     }
 
     private static async Task<IResult> List(ClaimsPrincipal principal, ILessonReader reader,
-        string? state, string? search, string? level, CancellationToken ct)
+        string? state, string? search, string? level, string? topic, CancellationToken ct)
     {
         if (!Guid.TryParse(principal.FindFirstValue("sub"), out var userId) || userId == Guid.Empty)
             return Results.Unauthorized();
@@ -33,8 +33,10 @@ public static class LessonEndpoints
         {
             search = search?.Trim();
             level = level?.Trim();
+            topic = topic?.Trim();
             var errors = new Dictionary<string, string[]>();
             if (search?.Length > 200) errors["search"] = ["Máximo 200 caracteres."];
+            if (topic?.Length > 200) errors["topic"] = ["Máximo 200 caracteres."];
             if (!string.IsNullOrEmpty(level))
             {
                 parsedLevel = level switch { "A2" => LessonLevel.A2, "B1" => LessonLevel.B1, "B2" => LessonLevel.B2, _ => null };
@@ -42,7 +44,7 @@ public static class LessonEndpoints
             }
             if (errors.Count > 0) return Results.ValidationProblem(errors);
         }
-        return Results.Ok(await reader.ListOwnedAsync(userId, state == "trash", search, parsedLevel, ct));
+        return Results.Ok(await reader.ListOwnedAsync(userId, state == "trash", search, parsedLevel, topic, ct));
     }
 
     private static async Task<IResult> Details(Guid id, ClaimsPrincipal principal, ILessonReader reader, CancellationToken ct)

@@ -24,7 +24,7 @@ public interface IAuthService
 public interface ILessonReader
 {
     Task<LessonSummary?> FindOwnedAsync(Guid lessonId, Guid userId, CancellationToken cancellationToken);
-    Task<IReadOnlyList<LessonListItemDto>> ListOwnedAsync(Guid userId, bool trash, string? search, LessonLevel? level, CancellationToken cancellationToken);
+    Task<IReadOnlyList<LessonListItemDto>> ListOwnedAsync(Guid userId, bool trash, string? search, LessonLevel? level, string? topic, CancellationToken cancellationToken);
     Task<LessonDetailsDto?> GetOwnedDetailsAsync(Guid lessonId, Guid userId, CancellationToken cancellationToken);
 }
 public record LessonSummary(Guid Id, string Title, int ActivityCount);

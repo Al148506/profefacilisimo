@@ -7,11 +7,13 @@ import { Button } from '../components/Button';
 import { LEVELS } from '../levels';
 import { transitionLesson, duplicateLesson, lessonDetailKey, lessonListKey, listLessons, type LessonFilters, type LessonLevel } from './lesson-api';
 import { formatLessonDuration } from './lesson-duration';
+import { COMMON_TOPICS } from './lesson-topics';
 
 export default function LessonsPage({ user, trash = false }: { user: User; trash?: boolean }) {
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState<LessonLevel | ''>('');
-  const [filters, setFilters] = useState<LessonFilters>({ search: '', level: '' });
+  const [topic, setTopic] = useState('');
+  const [filters, setFilters] = useState<LessonFilters>({ search: '', level: '', topic: '' });
   const client = useQueryClient();
   const navigate = useNavigate();
   const duplicate = useMutation({
@@ -42,9 +44,9 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
       : action === 'restore' ? '¿Restaurar "' + title + '"?' : '¿Enviar "' + title + '" a la papelera?';
     if (window.confirm(question)) transition.mutate({ id, action });
   }
-  const filtered = !!(filters.search || filters.level);
+  const filtered = !!(filters.search || filters.level || filters.topic);
   function clearFilters() {
-    setSearch(''); setLevel(''); setFilters({ search: '', level: '' });
+    setSearch(''); setLevel(''); setTopic(''); setFilters({ search: '', level: '', topic: '' });
   }
   return <section className="card lessons-page">
     <p className="eyebrow">Tu espacio como profe</p>
@@ -53,7 +55,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
       <Link className="button pf-btn" to="/lessons/new"><Plus aria-hidden="true" size={17} />Crear clase</Link><Link to="/lessons/trash">Papelera</Link><Link to="/students">Estudiantes</Link>
     </>}</nav>
     <p>{trash ? 'Restaura tus clases o elimínalas definitivamente.' : 'Encuentra tus clases por título o nivel.'}</p>
-    {!trash && <form className="lesson-filters" onSubmit={(event) => { event.preventDefault(); setFilters({ search: search.trim(), level }); }}>
+    {!trash && <form className="lesson-filters" onSubmit={(event) => { event.preventDefault(); setFilters({ search: search.trim(), level, topic }); }}>
       <div><label htmlFor="lesson-search">Buscar por título</label>
         <input id="lesson-search" type="search" maxLength={200} value={search} onChange={(event) => setSearch(event.target.value)} />
       </div>
@@ -61,6 +63,16 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
         <select id="lesson-level" value={level} onChange={(event) => setLevel(event.target.value as LessonLevel | '')}>
           <option value="">Todos los niveles</option>
           {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+        </select>
+      </div>
+      <div><label htmlFor="lesson-topic">Tema</label>
+        <select id="lesson-topic" value={topic} onChange={(event) => setTopic(event.target.value)}>
+          <option value="">Todos los temas</option>
+          {COMMON_TOPICS.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
         </select>
       </div>
       <Button type="submit" icon={Search}>Buscar</Button>
@@ -86,7 +98,7 @@ export default function LessonsPage({ user, trash = false }: { user: User; trash
               {!trash && !filtered && <p><Link to="/lessons/new">Crear clase</Link></p>}
             </>
           : <ul className="lesson-list">{lessons.data.map((lesson) =>
-            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span><p>{lesson.topic}</p>{!trash && <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>}<div className="lesson-actions">{!trash && <><Link className="button pf-btn" to={"/lessons/" + lesson.id + "/play"}><Play aria-hidden="true" size={17} />Iniciar clase</Link>
+            <li key={lesson.id}><h2>{lesson.title}</h2><span className="level-badge">{lesson.level}</span>{lesson.topic && <p className="lesson-topic">{lesson.topic}</p>}{!trash && <p className="lesson-duration">{formatLessonDuration(lesson.estimatedDuration)}</p>}<div className="lesson-actions">{!trash && <><Link className="button pf-btn" to={"/lessons/" + lesson.id + "/play"}><Play aria-hidden="true" size={17} />Iniciar clase</Link>
               <Link className="button pf-btn pf-btn--warning" to={"/lessons/" + lesson.id + "/edit"} aria-label={'Editar ' + lesson.title}><Pencil aria-hidden="true" size={17} />Editar clase</Link>
               <Button variant="accent" className="duplicate-button" type="button" disabled={busy}
                 icon={Copy}

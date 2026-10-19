@@ -4,12 +4,19 @@ import type { LessonActivityDto, LessonActivityInput } from './lesson-api';
 const REQUIRED = 'Este campo es obligatorio.';
 const text = (max: number) => z.string().trim().min(1, REQUIRED).max(max, 'Máximo ' + max + ' caracteres.');
 
-/** Metadata of a lesson. Unchanged by SPEC 02: the editor still asks for these four fields. */
+/** Metadata of a lesson. Topic is optional as per SPEC 08. */
 export const lessonSchema = z.object({
-  title: text(200), level: z.enum(['A2', 'B1', 'B2'], { error: 'Selecciona A2, B1 o B2.' }),
-  topic: text(200), objective: text(2000),
+  title: text(200),
+  level: z.enum(['A2', 'B1', 'B2'], { error: 'Selecciona A2, B1 o B2.' }),
+  topic: z
+    .string()
+    .trim()
+    .max(200, 'Máximo 200 caracteres.')
+    .default(''),
+  objective: text(2000),
 });
 export type LessonValues = z.infer<typeof lessonSchema>;
+export type LessonFormValues = z.input<typeof lessonSchema>;
 
 export const ACTIVITY_TYPES = ['Speaking', 'Reading', 'Writing', 'VocabularyGrammar'] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];

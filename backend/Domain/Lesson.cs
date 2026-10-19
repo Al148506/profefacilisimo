@@ -12,7 +12,7 @@ public sealed class Lesson
     private readonly List<LessonAssignment> _assignments = [];
     private Lesson() { }
 
-    public Lesson(Guid userId, string title, LessonLevel level, string topic, string objective,
+    public Lesson(Guid userId, string title, LessonLevel level, string? topic, string objective,
         IReadOnlyList<ActivityDraft>? activities = null)
     {
         if (userId == Guid.Empty) throw new ArgumentException("A lesson needs an owner.", nameof(userId));
@@ -20,7 +20,7 @@ public sealed class Lesson
         Id = Guid.NewGuid();
         UserId = userId;
         Title = Rules.Text(title, 200, nameof(title));
-        Topic = Rules.Text(topic, 200, nameof(topic));
+        Topic = Rules.Optional(topic, 200, nameof(topic));
         Objective = Rules.Text(objective, 2000, nameof(objective));
         Level = level;
         // The total is never supplied by the caller: it is derived from the activities the lesson is
@@ -35,7 +35,7 @@ public sealed class Lesson
     public Guid UserId { get; private set; }
     public string Title { get; private set; } = "";
     public LessonLevel Level { get; private set; }
-    public string Topic { get; private set; } = "";
+    public string? Topic { get; private set; }
     public string Objective { get; private set; } = "";
     public int? EstimatedDuration { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -48,12 +48,12 @@ public sealed class Lesson
     // lesson's content, its activities, its total or its UpdatedAt.
     public IReadOnlyCollection<LessonAssignment> Assignments => _assignments.AsReadOnly();
 
-    public void UpdateMetadata(string title, LessonLevel level, string topic, string objective)
+    public void UpdateMetadata(string title, LessonLevel level, string? topic, string objective)
     {
         EnsureActive();
         if (!Enum.IsDefined(level)) throw new ArgumentException("Unsupported level.", nameof(level));
         var validTitle = Rules.Text(title, 200, nameof(title));
-        var validTopic = Rules.Text(topic, 200, nameof(topic));
+        var validTopic = Rules.Optional(topic, 200, nameof(topic));
         var validObjective = Rules.Text(objective, 2000, nameof(objective));
         Title = validTitle;
         Topic = validTopic;

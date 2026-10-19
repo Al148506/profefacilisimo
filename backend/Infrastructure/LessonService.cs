@@ -114,7 +114,8 @@ public sealed class LessonService(AppDbContext db) : ILessonService
     {
         var errors = new Dictionary<string, string[]>();
         CheckText(request.Title, 200, "title", errors);
-        CheckText(request.Topic, 200, "topic", errors);
+        if (!string.IsNullOrWhiteSpace(request.Topic) && request.Topic.Trim().Length > 200)
+            errors["topic"] = ["topic cannot exceed 200 characters."];
         CheckText(request.Objective, 2000, "objective", errors);
         if (request.Level is not ("A2" or "B1" or "B2")) errors["level"] = ["Usa A2, B1 o B2."];
 

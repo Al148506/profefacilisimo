@@ -33,20 +33,25 @@ function page(path = '/lessons/l1/edit') {
 }
 it('validates required fields without sending and schema enforces limits and levels', async () => {
   page('/lessons/new');
-  // The first step never sends: «Continuar» refuses to advance and reveals the same three messages.
+  // Title and Objective are mandatory, Topic is optional: «Continuar» refuses to advance and reveals two messages.
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
-  expect(await screen.findAllByText('Este campo es obligatorio.')).toHaveLength(3);
+  expect(await screen.findAllByText('Este campo es obligatorio.')).toHaveLength(2);
   expect(saveLesson).not.toHaveBeenCalled();
   for (const [field, value] of [['title', 'x'.repeat(201)], ['topic', 'x'.repeat(201)], ['objective', 'x'.repeat(2001)], ['level', 'B3'], ['title', '   ']]) {
     expect(lessonSchema.safeParse({ ...detail, [field]: value }).success).toBe(false);
   }
   expect(lessonSchema.parse({ ...detail, title: '  Recortado  ' }).title).toBe('Recortado');
+  // Topic is optional: empty string and undefined parse successfully with default ''
+  expect(lessonSchema.parse({ ...detail, topic: '' }).topic).toBe('');
+  expect(lessonSchema.parse({ ...detail, topic: undefined }).topic).toBe('');
 });
-it('creates using trimmed metadata and opens the saved editor', async () => {
+it('creates using trimmed metadata, supports topic datalist, and opens the saved editor', async () => {
   vi.mocked(saveLesson).mockResolvedValue({ ...detail, title: 'Nueva' });
   page('/lessons/new');
+  const topicInput = screen.getByLabelText(/Tema/);
+  expect(topicInput).toHaveAttribute('list', 'common-topics');
   await userEvent.type(screen.getByLabelText('Título'), ' Nueva ');
-  await userEvent.type(screen.getByLabelText('Tema'), ' Tema ');
+  await userEvent.type(topicInput, ' Tema ');
   await userEvent.type(screen.getByLabelText('Objetivo'), ' Objetivo ');
   await userEvent.selectOptions(screen.getByLabelText('Nivel'), 'B1');
   // Creating walks the whole wizard: «Continuar» reaches the activities, «Guardar clase» sends.
@@ -54,6 +59,18 @@ it('creates using trimmed metadata and opens the saved editor', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
   expect(saveLesson).toHaveBeenCalledWith({ title: 'Nueva', level: 'B1', topic: 'Tema', objective: 'Objetivo', activities: [] }, undefined);
+});
+
+it('creates lesson successfully without topic', async () => {
+  vi.mocked(saveLesson).mockResolvedValue({ ...detail, title: 'Sin Tema', topic: null });
+  page('/lessons/new');
+  await userEvent.type(screen.getByLabelText('Título'), 'Sin Tema');
+  await userEvent.type(screen.getByLabelText('Objetivo'), 'Objetivo');
+  await userEvent.selectOptions(screen.getByLabelText('Nivel'), 'A2');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
+  expect(saveLesson).toHaveBeenCalledWith({ title: 'Sin Tema', level: 'A2', topic: '', objective: 'Objetivo', activities: [] }, undefined);
 });
 
 it('validates the content of each activity type and keeps the exact field path', () => {
@@ -150,7 +167,7 @@ it('shows loading and unavailable error then permits retry', async () => {
 
 async function metadata() {
   await userEvent.type(screen.getByLabelText('Título'), 'Clase');
-  await userEvent.type(screen.getByLabelText('Tema'), 'Tema');
+  await userEvent.type(screen.getByLabelText(/Tema/), 'Tema');
   await userEvent.type(screen.getByLabelText('Objetivo'), 'Objetivo');
   // The activities only exist on the second step, so the helper leaves the editor there.
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));

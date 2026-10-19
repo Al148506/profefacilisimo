@@ -13,7 +13,7 @@ public sealed class LessonReader(AppDbContext db) : ILessonReader
             .Select(x => new LessonSummary(x.Id, x.Title, x.Activities.Count)).SingleOrDefaultAsync(cancellationToken);
 
     public async Task<IReadOnlyList<LessonListItemDto>> ListOwnedAsync(
-        Guid userId, bool trash, string? search, LessonLevel? level, CancellationToken cancellationToken)
+        Guid userId, bool trash, string? search, LessonLevel? level, string? topic, CancellationToken cancellationToken)
     {
         var query = db.Lessons.AsNoTracking().Where(x => x.UserId == userId);
         if (trash)
@@ -27,6 +27,11 @@ public sealed class LessonReader(AppDbContext db) : ILessonReader
                 query = query.Where(x => EF.Functions.ILike(x.Title, pattern, "!"));
             }
             if (level is not null) query = query.Where(x => x.Level == level);
+            if (!string.IsNullOrWhiteSpace(topic))
+            {
+                var trimmedTopic = topic.Trim();
+                query = query.Where(x => x.Topic != null && EF.Functions.ILike(x.Topic, trimmedTopic));
+            }
             query = query.OrderByDescending(x => x.UpdatedAt).ThenBy(x => x.Id);
         }
         return await query.Select(x => new LessonListItemDto(x.Id, x.Title, x.Level.ToString(),
