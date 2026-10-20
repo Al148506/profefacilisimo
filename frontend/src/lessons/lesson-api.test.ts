@@ -29,7 +29,7 @@ it('sends metadata plus the activity set and never UserId, LessonId or Order', a
     title: 'Clase', level: 'B1' as const, topic: 'Tema', objective: 'Objetivo', estimatedDuration: 999,
     activities: [
       { id: null, type: 'Writing' as const, title: 'A', instructions: 'Instrucciones', estimatedDuration: 10, content: { prompt: 'Consigna' } },
-      { id: 'a1', type: 'Speaking' as const, title: 'B', instructions: 'Instrucciones', estimatedDuration: 5, content: { questionsList: ['Pregunta'] } },
+      { id: 'a1', type: 'Speaking' as const, title: 'B', instructions: 'Instrucciones', estimatedDuration: 5, content: { subtype: 'conversation' as const, questionsList: ['Pregunta'] } },
     ],
   };
   await saveLesson(values, 'l1');
@@ -41,7 +41,7 @@ it('sends metadata plus the activity set and never UserId, LessonId or Order', a
     title: 'Clase', level: 'B1', topic: 'Tema', objective: 'Objetivo',
     activities: [
       { id: null, type: 'Writing', title: 'A', instructions: 'Instrucciones', estimatedDuration: 10, content: { prompt: 'Consigna' } },
-      { id: 'a1', type: 'Speaking', title: 'B', instructions: 'Instrucciones', estimatedDuration: 5, content: { questionsList: ['Pregunta'] } },
+      { id: 'a1', type: 'Speaking', title: 'B', instructions: 'Instrucciones', estimatedDuration: 5, content: { subtype: 'conversation', questionsList: ['Pregunta'] } },
     ],
   });
   vi.mocked(authenticatedFetch).mockResolvedValueOnce(new Response(JSON.stringify({ errors: { title: ['Título inválido.'] } }), { status: 400 }));

@@ -10,12 +10,23 @@
    final de la lista, queda seleccionada y abre su formulario.
 4. **Título de la actividad**, **Instrucciones** y **Duración (minutos)** existen en los cuatro
    tipos. El resto de campos depende del tipo:
-   - Speaking: lista de preguntas.
+   - Speaking: depende del **tipo de práctica oral** (SPEC 09) —
+     - **Conversation** (por defecto, y lo que eran todas las Speaking anteriores): lista de
+       preguntas que se puede añadir, quitar y reordenar con Subir / Bajar.
+     - **Roleplay**: situación o contexto (obligatorio), roles de los participantes con nombre y
+       descripción opcional (2 como mínimo, 6 como máximo), objetivo comunicativo y material de
+       apoyo opcionales, guion de conversación como texto continuo (opcional) y modo de práctica
+       (Con guion / Guiado / Libre, obligatorio; «Con guion» exige guion).
+     - **Presentation**: tema (obligatorio) y puntos de apoyo opcionales (hasta 20). No tiene
+       preguntas.
+     Cambiar de práctica oral pide confirmación solo si hay contenido significativo; con las filas
+     aún vacías el cambio es directo. Cancelar conserva el subtipo y todos los campos.
    - Reading: texto de lectura y lista de preguntas.
    - Writing: consigna.
    - Vocabulario y gramática: explicación y lista de ejercicios.
-5. Añade y quita filas con **Añadir pregunta** / **Añadir ejercicio** y **Quitar**. Siempre queda
-   al menos una fila.
+5. Añade y quita filas con **Añadir pregunta** / **Añadir ejercicio** / **Añadir punto** /
+   **Añadir rol** y **Quitar**. En preguntas y ejercicios siempre queda al menos una fila; en los
+   puntos de apoyo la lista puede quedar vacía; en los roles se conservan al menos dos.
 6. Cambia el tipo con el selector **Tipo**. Si hay contenido específico que descartar, se pide
    confirmación; cancelar deja intacto el tipo y todos los campos, y confirmar conserva Id, título,
    instrucciones y duración y vacía solo el contenido específico.
@@ -67,9 +78,14 @@
   las actividades afectadas; además el editor abre la primera que necesita atención.
 - **Sin selección automática al cargar.** Al abrir una clase no se selecciona ninguna actividad: la
   lista es la vista principal y el formulario aparece al elegir una o al agregar una nueva.
-- **Quitar la última fila está deshabilitado.** Mantiene el borrador siempre dentro de la regla de
-  1 a 50 preguntas o ejercicios, en lugar de permitir un estado que el profesor no podría corregir
-  sin volver a añadir la fila.
+- **Quitar la última fila está deshabilitado** en preguntas y ejercicios. Mantiene el borrador
+  siempre dentro de la regla de 1 a 50, en lugar de permitir un estado que el profesor no podría
+  corregir sin volver a añadir la fila. Los puntos de apoyo de una Presentation sí pueden vaciarse
+  (son opcionales) y los roles conservan el mínimo de dos.
+- **Los subtipos de Speaking viven dentro del JSON de contenido** (SPEC 09): `subtype` decide las
+  reglas aplicables, las filas anteriores a SPEC 09 se leen como `conversation` y no hay ninguna
+  migración. `LessonService` y los DTOs siguen tratando el contenido como un `JsonElement` opaco;
+  la autoridad es `SpeakingContent.Validate()` en el dominio.
 - **`ActivityList` es totalmente controlado.** No guarda copia de las actividades, por lo que
   cambiar de selección no puede perder los valores locales de las demás.
 

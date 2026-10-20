@@ -61,6 +61,9 @@ public class LessonEditorTests(ApiFixture fixture) : IClassFixture<ApiFixture>
         new(id, type, title, "Instrucciones de " + title, duration,
             JsonSerializer.SerializeToElement(content, content.GetType(), JsonOptions));
 
+    private static object[] TwoRoles() =>
+        [new { name = "Waiter", description = (string?)null }, new { name = "Customer", description = (string?)null }];
+
     private async Task<int> CountActivitiesAsync(Guid lessonId)
     {
         using var scope = fixture.Services.CreateScope();
@@ -107,8 +110,7 @@ public class LessonEditorTests(ApiFixture fixture) : IClassFixture<ApiFixture>
     }
 
     [Fact]
-    public async Task CreateSavesMetadataAndTheWholeSetInOneRequest()
-    {
+    public async Task CreateSavesMetadataAndTheWholeSetInOneRequest()    {
         var owner = await SeedOwnerAsync();
         using var client = Client(owner);
         var response = await client.PostAsJsonAsync("/api/lessons", new SaveLessonRequest("Clase", "B1", "Tema", "Objetivo",
@@ -143,6 +145,94 @@ public class LessonEditorTests(ApiFixture fixture) : IClassFixture<ApiFixture>
         Assert.Equal("Ejercicio", reloaded.Activities[3].Content.GetProperty("exercises")[0].GetString());
         Assert.Equal(50, reloaded.EstimatedDuration);
         Assert.Equal(4, await CountActivitiesAsync(detail.Id));
+    }
+
+    [Fact]
+    public async Task SpeakingSubtypesRoundTripEveryFieldThroughTheApi()
+    {
+        var owner = await SeedOwnerAsync();
+        using var client = Client(owner);
+        var roleplay = new
+        {
+            subtype = "roleplay",
+            context = "Cena en un restaurante",
+            roles = new[]
+            {
+                new { name = "Waiter", description = (string?)"El camarero toma el pedido" },
+                new { name = "Customer", description = (string?)null }
+            },
+            objective = "Pedir comida, preguntar precios y pedir la cuenta",
+            material = (string?)null,
+            script = "Waiter: Good evening! Are you ready to order?\nCustomer: Not yet. Could I have a few more minutes, please?",
+            practiceMode = "scripted"
+        };
+        var response = await client.PostAsJsonAsync("/api/lessons", new SaveLessonRequest("Clase oral", "B1", "Tema", "Objetivo",
+        [
+            Input("Speaking", "Roleplay", 10, roleplay),
+            Input("Speaking", "Conversación", 10, new { subtype = "conversation", questionsList = new[] { "¿Qué tal?" } }),
+            Input("Speaking", "Presentación", 15, new
+            {
+                subtype = "presentation",
+                context = "Mi ciudad favorita",
+                talkingPoints = new[] { "Lugares", "Comida" }
+            }),
+        ]));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var detail = (await response.Content.ReadFromJsonAsync<LessonDetailsDto>())!;
+
+        // Enums travel as lowercase strings and Presentation never carries a questionsList.
+        Assert.Equal("roleplay", detail.Activities[0].Content.GetProperty("subtype").GetString());
+        Assert.Equal("scripted", detail.Activities[0].Content.GetProperty("practiceMode").GetString());
+        Assert.Equal("Waiter", detail.Activities[0].Content.GetProperty("roles")[0].GetProperty("name").GetString());
+        Assert.Equal("Mi ciudad favorita", detail.Activities[2].Content.GetProperty("context").GetString());
+
+        var reloaded = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{detail.Id}"))!;
+        // jsonb normalizes the key order of the stored object, so the content is compared by value.
+        for (var i = 0; i < detail.Activities.Count; i++)
+            Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(
+                System.Text.Json.Nodes.JsonNode.Parse(detail.Activities[i].Content.GetRawText()),
+                System.Text.Json.Nodes.JsonNode.Parse(reloaded.Activities[i].Content.GetRawText())),
+                $"activities[{i}] content changed between save and reload");
+        Assert.Equal("Waiter: Good evening! Are you ready to order?\nCustomer: Not yet. Could I have a few more minutes, please?",
+            reloaded.Activities[0].Content.GetProperty("script").GetString());
+        Assert.Equal("¿Qué tal?", reloaded.Activities[1].Content.GetProperty("questionsList")[0].GetString());
+        Assert.Equal("Comida", reloaded.Activities[2].Content.GetProperty("talkingPoints")[1].GetString());
+    }
+
+    [Fact]
+    public async Task LegacySpeakingRowWithoutSubtypeKeepsWorkingAndNormalizesToConversation()
+    {
+        var owner = await SeedOwnerAsync();
+        var lessonId = await SeedLessonAsync(owner, "Heredada");
+        var activityId = Guid.NewGuid();
+        var legacyJson = """{"questionsList":["¿Qué tal?"]}""";
+        using (var scope = fixture.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Activities" ("Id", "LessonId", "Type", "Title", "Instructions", "Content", "Order", "EstimatedDuration")
+                VALUES ({activityId}, {lessonId}, 'Speaking', 'Hablar', 'Instrucciones',
+                    CAST({legacyJson} AS jsonb), 0, 10);
+                """);
+        }
+
+        using var client = Client(owner);
+        var before = (await client.GetFromJsonAsync<LessonDetailsDto>($"/api/lessons/{lessonId}"))!;
+        // The reader forwards the stored JSON verbatim: the legacy row keeps its exact shape.
+        Assert.False(before.Activities[0].Content.TryGetProperty("subtype", out _));
+
+        // The editor resends it without a subtype and the save succeeds: the domain defaults it to
+        // Conversation, and the row is rewritten with the new explicit shape.
+        var response = await client.PutAsJsonAsync($"/api/lessons/{lessonId}", new SaveLessonRequest("Heredada", "B1", "Tema", "Objetivo",
+        [
+            Input("Speaking", "Hablar", 10, new { questionsList = new[] { "¿Qué tal?" } }, activityId),
+        ]));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var scopeAfter = fixture.Services.CreateScope();
+        var dbAfter = scopeAfter.ServiceProvider.GetRequiredService<AppDbContext>();
+        var stored = await dbAfter.Database.SqlQueryRaw<string>(
+            """SELECT "Content"->>'subtype' AS "Value" FROM "Activities" WHERE "Id" = {0}""", activityId).SingleAsync();
+        Assert.Equal("conversation", stored);
     }
 
     [Fact]
@@ -300,6 +390,13 @@ public class LessonEditorTests(ApiFixture fixture) : IClassFixture<ApiFixture>
     [InlineData("blank-title", "activities[1].title")]
     [InlineData("blank-prompt", "activities[1].content")]
     [InlineData("content-not-an-object", "activities[1].content")]
+    [InlineData("roleplay-blank-context", "activities[1].content")]
+    [InlineData("roleplay-one-role", "activities[1].content")]
+    [InlineData("roleplay-seven-roles", "activities[1].content")]
+    [InlineData("roleplay-scripted-without-script", "activities[1].content")]
+    [InlineData("roleplay-without-practice-mode", "activities[1].content")]
+    [InlineData("roleplay-unknown-subtype", "activities[1].content")]
+    [InlineData("presentation-without-context", "activities[1].content")]
     public async Task OneInvalidActivityRejectsTheWholeSaveAndPointsAtIt(string scenario, string field)
     {
         var owner = await SeedOwnerAsync();
@@ -315,6 +412,20 @@ public class LessonEditorTests(ApiFixture fixture) : IClassFixture<ApiFixture>
             "too-many-questions" => Input("Speaking", "A", 10, new { questionsList = Enumerable.Repeat("x", 51).ToArray() }),
             "blank-title" => Input("Writing", "   ", 10, new { prompt = "Consigna" }),
             "blank-prompt" => Input("Writing", "A", 10, new { prompt = "" }),
+            "roleplay-blank-context" => Input("Speaking", "A", 10, new { subtype = "roleplay", context = "  ",
+                roles = TwoRoles(), practiceMode = "free" }),
+            "roleplay-one-role" => Input("Speaking", "A", 10, new { subtype = "roleplay", context = "Cena",
+                roles = new[] { new { name = "Waiter", description = (string?)null } }, practiceMode = "free" }),
+            "roleplay-seven-roles" => Input("Speaking", "A", 10, new { subtype = "roleplay", context = "Cena",
+                roles = Enumerable.Range(0, 7).Select(i => new { name = $"Rol {i}", description = (string?)null }).ToArray(),
+                practiceMode = "free" }),
+            "roleplay-scripted-without-script" => Input("Speaking", "A", 10, new { subtype = "roleplay", context = "Cena",
+                roles = TwoRoles(), practiceMode = "scripted", script = (string?)null }),
+            "roleplay-without-practice-mode" => Input("Speaking", "A", 10, new { subtype = "roleplay", context = "Cena",
+                roles = TwoRoles(), practiceMode = (string?)null }),
+            "roleplay-unknown-subtype" => Input("Speaking", "A", 10, new { subtype = "debate", context = "Cena",
+                roles = TwoRoles(), practiceMode = "free" }),
+            "presentation-without-context" => Input("Speaking", "A", 10, new { subtype = "presentation", context = (string?)null }),
             _ => new LessonActivityInput(null, "Writing", "A", "Instrucciones", 10, JsonSerializer.SerializeToElement("texto"))
         };
 

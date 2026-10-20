@@ -40,6 +40,70 @@ it('shows the instructions and the numbered questions of a Speaking activity', (
   expect(listItems()).toEqual(['¿Cómo te llamas?', '¿De dónde eres?']);
 });
 
+it('shows the situation, roles, objective and script of a roleplay', () => {
+  const { container } = render(<ActivityView activity={activity('Speaking', {
+    subtype: 'roleplay', context: 'Cena en un restaurante',
+    roles: [{ name: 'Waiter', description: 'Toma el pedido' }, { name: 'Customer', description: null }],
+    objective: 'Pedir la cuenta', material: 'Tarjetas de apoyo',
+    script: 'Waiter: Good evening!\nCustomer: Not yet.', practiceMode: 'scripted', questionsList: null,
+  })} />);
+  // Every block reuses a contract class: texts as paragraphs and roles as one numbered list.
+  const root = container.querySelector('section.player-activity')!;
+  expect(Array.from(root.children).map((child) => child.className)).toEqual([
+    'player-activity-instructions', 'player-activity-text', 'player-activity-list',
+    'player-activity-text', 'player-activity-text', 'player-activity-text',
+  ]);
+  expect(screen.getByText('Situación:')).toBeInTheDocument();
+  expect(screen.getByText('Cena en un restaurante')).toBeInTheDocument();
+  expect(listItems()).toEqual(['Waiter — Toma el pedido', 'Customer']);
+  expect(screen.getByText('Objetivo:')).toBeInTheDocument();
+  expect(screen.getByText('Pedir la cuenta')).toBeInTheDocument();
+  expect(screen.getByText('Material de apoyo:')).toBeInTheDocument();
+  // The continuous script keeps its line breaks as real breaks: one paragraph, two interventions.
+  const script = screen.getByText(/Good evening!/);
+  expect(script.className).toBe('player-activity-text');
+  expect(script.querySelectorAll('br')).toHaveLength(1);
+  expect(script.textContent).toBe('Waiter: Good evening!Customer: Not yet.');
+});
+
+it('omits the optional roleplay blocks that are blank', () => {
+  const { container } = render(<ActivityView activity={activity('Speaking', {
+    subtype: 'roleplay', context: 'Una fiesta',
+    roles: [{ name: 'Ana', description: '' }], objective: null, material: null, script: null, practiceMode: 'free',
+  })} />);
+  expect(bodyClasses(container)).toEqual(['player-activity-instructions', 'player-activity-text', 'player-activity-list']);
+  expect(screen.queryByText('Objetivo:')).not.toBeInTheDocument();
+  expect(screen.queryByText('Material de apoyo:')).not.toBeInTheDocument();
+  expect(listItems()).toEqual(['Ana']);
+});
+
+it('shows the theme and the talking points of a presentation', () => {
+  const { container } = render(<ActivityView activity={activity('Speaking', {
+    subtype: 'presentation', context: 'Mi ciudad favorita', talkingPoints: ['Lugares', 'Comida'], questionsList: null,
+  })} />);
+  expect(bodyClasses(container)).toEqual(['player-activity-instructions', 'player-activity-text', 'player-activity-list']);
+  expect(screen.getByText('Tema:')).toBeInTheDocument();
+  expect(screen.getByText('Mi ciudad favorita')).toBeInTheDocument();
+  expect(listItems()).toEqual(['Lugares', 'Comida']);
+});
+
+it('shows a presentation without points as only its theme', () => {
+  const { container } = render(<ActivityView activity={activity('Speaking', {
+    subtype: 'presentation', context: 'Mis vacaciones', talkingPoints: [],
+  })} />);
+  expect(bodyClasses(container)).toEqual(['player-activity-instructions', 'player-activity-text']);
+  expect(screen.queryByRole('list')).not.toBeInTheDocument();
+});
+
+it('reads a speaking row without subtype as conversation', () => {
+  const { container } = render(<ActivityView activity={activity('Speaking', {
+    questionsList: ['¿Qué tal?'], roles: [{ name: 'Ajeno', description: null }], script: 'Diálogo ajeno',
+  })} />);
+  expect(bodyClasses(container)).toEqual(['player-activity-instructions', 'player-activity-list']);
+  expect(listItems()).toEqual(['¿Qué tal?']);
+  expect(screen.queryByText(/Diálogo ajeno/)).not.toBeInTheDocument();
+});
+
 it('shows the instructions, the reading text and the questions of a Reading activity', () => {
   const { container } = render(<ActivityView activity={activity('Reading', {
     text: 'Un texto de lectura.', questionsList: ['Primera pregunta'],

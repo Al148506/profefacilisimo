@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Profefacilisimo.Domain;
 
@@ -32,10 +33,79 @@ public abstract record ActivityContent
     }
 }
 
-public sealed record SpeakingContent(IReadOnlyList<string> QuestionsList) : ActivityContent
+// Conversation = 0: legacy Speaking JSON without a "subtype" property deserializes to it,
+// so activities saved before SPEC 09 keep their current behaviour without any migration.
+public enum SpeakingSubtype { Conversation, Roleplay, Presentation }
+
+public enum RoleplayPracticeMode { Scripted, Guided, Free }
+
+public sealed record SpeakingRole(string Name, string? Description);
+
+public sealed record SpeakingContent(
+    IReadOnlyList<string>? QuestionsList = null,
+    SpeakingSubtype Subtype = SpeakingSubtype.Conversation,
+    string? Context = null,
+    IReadOnlyList<SpeakingRole>? Roles = null,
+    string? Objective = null,
+    string? Material = null,
+    string? Script = null,
+    RoleplayPracticeMode? PracticeMode = null,
+    IReadOnlyList<string>? TalkingPoints = null
+) : ActivityContent
 {
     public override ActivityType Type => ActivityType.Speaking;
-    public override void Validate() => Questions(QuestionsList);
+
+    // Branching validation: each subtype enforces only its own fields. Fields belonging to other
+    // subtypes are neither required nor validated; the editor write path normalizes them to null.
+    public override void Validate()
+    {
+        switch (Subtype)
+        {
+            case SpeakingSubtype.Conversation:
+                Questions(QuestionsList);
+                break;
+            case SpeakingSubtype.Roleplay:
+                ValidateRoleplay();
+                break;
+            case SpeakingSubtype.Presentation:
+                ValidatePresentation();
+                break;
+            default:
+                throw new ArgumentException("Unsupported speaking subtype.", nameof(Subtype));
+        }
+    }
+
+    private void ValidateRoleplay()
+    {
+        Rules.Text(Context, 2000, nameof(Context));
+        if (Roles is null || Roles.Count is < 2 or > 6)
+            throw new ArgumentException("Provide between 2 and 6 roles.", nameof(Roles));
+        foreach (var role in Roles)
+        {
+            Rules.Text(role.Name, 100, "role name");
+            Rules.Optional(role.Description, 500, "role description");
+        }
+        if (PracticeMode is null || !Enum.IsDefined(PracticeMode.Value))
+            throw new ArgumentException("Select a practice mode.", nameof(PracticeMode));
+        Rules.Optional(Objective, 2000, nameof(Objective));
+        Rules.Optional(Material, 5000, nameof(Material));
+        Rules.Optional(Script, 10000, nameof(Script));
+        // Cross-rule: the scripted mode is a promise the student can follow a dialogue,
+        // so it is rejected without one. Guided and free accept an empty script.
+        if (PracticeMode == RoleplayPracticeMode.Scripted)
+            Rules.Text(Script, 10000, nameof(Script));
+    }
+
+    private void ValidatePresentation()
+    {
+        Rules.Text(Context, 2000, nameof(Context));
+        if (TalkingPoints is not null)
+        {
+            if (TalkingPoints.Count > 20)
+                throw new ArgumentException("Provide up to 20 talking points.", nameof(TalkingPoints));
+            foreach (var point in TalkingPoints) Rules.Text(point, 500, "talking point");
+        }
+    }
 }
 public sealed record ReadingContent(string Text, IReadOnlyList<string> QuestionsList) : ActivityContent
 {
@@ -133,5 +203,15 @@ public sealed class Activity
 
 internal static class ContentJson
 {
-    public static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    // Enums are stored as camelCase strings ("conversation", "scripted"). Existing content JSON
+    // never carried enum values, so the converter cannot contradict stored rows; it only shapes
+    // what SPEC 09 writes.
+    public static readonly JsonSerializerOptions Options = CreateOptions();
+
+    private static JsonSerializerOptions CreateOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        return options;
+    }
 }

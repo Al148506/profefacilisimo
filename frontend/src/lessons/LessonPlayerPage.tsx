@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import ActivityView from './ActivityView';
 import { getLesson, lessonDetailKey, type LessonDetails } from './lesson-api';
 import { formatLessonDuration } from './lesson-duration';
-import { ACTIVITY_TYPE_LABELS } from './lesson-schema';
+import { activityTypeLabel } from './lesson-schema';
 import { canonicalPosition, CLOSING_VALUE, POSITION_PARAM, positionParam, readPlayerPosition } from './player-position';
 
 /**
@@ -156,7 +156,7 @@ function LessonPlayer({ lesson }: { lesson: LessonDetails }) {
           <span className="lesson-player-meta-separator" aria-hidden="true">·</span>
           <span data-testid="player-activity-title">{current.title}</span>
           <span className="lesson-player-meta-separator" aria-hidden="true">·</span>
-          <span data-testid="player-activity-type">{ACTIVITY_TYPE_LABELS[current.type]}</span>
+          <span data-testid="player-activity-type">{activityTypeLabel(current.type, current.content)}</span>
           <span className="lesson-player-meta-separator" aria-hidden="true">·</span>
           <span data-testid="player-activity-duration">{activityDuration(current.estimatedDuration)}</span>
         </p>
