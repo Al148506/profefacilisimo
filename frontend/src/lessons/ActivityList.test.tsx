@@ -6,7 +6,7 @@ import ActivityList from './ActivityList';
 import type { ActivityDraft } from './lesson-schema';
 
 const speaking = (key: string, title: string, duration: number | null): ActivityDraft =>
-  ({ key, id: null, type: 'Speaking', title, instructions: 'Instrucciones', duration, content: { questionsList: ['Pregunta'] } });
+  ({ key, id: null, type: 'Speaking', title, instructions: 'Instrucciones', duration, content: { subtype: 'conversation', questionsList: ['Pregunta'] } });
 const reading = (key: string, title: string, duration: number | null): ActivityDraft =>
   ({ key, id: null, type: 'Reading', title, instructions: 'Instrucciones', duration, content: { text: 'Texto', questionsList: ['Pregunta'] } });
 const writing = (key: string, title: string, duration: number | null): ActivityDraft =>
@@ -23,7 +23,7 @@ it('renders the draft in order and reports the selection without mutating the dr
   render(list({ onSelect }));
   const items = screen.getAllByRole('button', { pressed: false });
   expect(items).toHaveLength(2);
-  expect(screen.getByRole('button', { pressed: true })).toHaveTextContent('1PrimeraSpeaking10 min');
+  expect(screen.getByRole('button', { pressed: true })).toHaveTextContent('1PrimeraSpeaking · Conversation10 min');
   // The activity without a title and without a duration is shown as incomplete, never as 0 min.
   expect(screen.getByText('Actividad sin título')).toBeInTheDocument();
   expect(screen.getByText('Sin duración')).toBeInTheDocument();

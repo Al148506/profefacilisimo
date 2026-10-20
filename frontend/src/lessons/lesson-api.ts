@@ -1,5 +1,5 @@
 import { authenticatedFetch } from '../auth';
-import type { ActivityContent, ActivityType, LessonValues } from './lesson-schema';
+import type { ActivityContentInput, ActivityType, LessonValues } from './lesson-schema';
 
 export type LessonLevel = 'A2' | 'B1' | 'B2';
 export type LessonFilters = { search: string; level: LessonLevel | ''; topic: string };
@@ -26,7 +26,7 @@ export type LessonDetails = LessonListItem & {
  */
 export type LessonActivityInput = {
   id: string | null; type: ActivityType; title: string; instructions: string;
-  estimatedDuration: number; content: ActivityContent;
+  estimatedDuration: number; content: ActivityContentInput;
 };
 
 /** Metadata plus the complete activity set. A missing array is never sent by the editor. */

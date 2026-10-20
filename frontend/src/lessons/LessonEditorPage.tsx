@@ -6,6 +6,7 @@ import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
 import { Plus, X, ArrowLeft, ArrowRight, Save, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth';
 import { Button } from '../components/Button';
+import Modal from '../components/Modal';
 import { LEVELS } from '../levels';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
@@ -64,19 +65,40 @@ function serverErrors(fields: Record<string, string[]>, activities: readonly Act
 }
 
 /**
- * Re-validates one activity as it is edited, so a message never outlives the mistake it reports.
- * Only activities that already carry errors are re-checked: an activity the teacher has not tried to
- * save yet is never marked for fields still left to fill in.
+ * Re-validates the activity open in the modal as it is edited, so a message never outlives the
+ * mistake it reports. Only activities that already carry errors inside the window are re-checked.
  */
-function revalidate(errors: DraftErrors, activity: ActivityDraft): DraftErrors {
-  if (!errors[activity.key]) return errors;
+function refreshActivityFields(fields: ActivityFieldErrors, activity: ActivityDraft): ActivityFieldErrors {
+  if (Object.keys(fields).length === 0) return fields;
   const parsed = activityDraftSchema.safeParse(activity);
-  const fields = parsed.success ? {} : (issueErrors(parsed.error.issues, [activity])[activity.key] ?? {});
-  if (Object.keys(fields).length > 0) return { ...errors, [activity.key]: fields };
-  const remaining = { ...errors };
-  delete remaining[activity.key];
-  return remaining;
+  return parsed.success ? {} : activityFieldErrors(parsed.error.issues);
 }
+
+/** The single-activity issues arrive without the `activities[i]` prefix, exactly as the form keys them. */
+function activityFieldErrors(issues: readonly { path: readonly PropertyKey[]; message: string }[]): ActivityFieldErrors {
+  const fields: ActivityFieldErrors = {};
+  for (const issue of issues) {
+    const path = issue.path.join('.');
+    fields[path] ??= issue.message;
+  }
+  return fields;
+}
+
+/**
+ * The activity window: a local copy of one activity, created or edited. The draft list only ever
+ * sees it when the teacher presses «Guardar actividad», so closing without saving changes nothing.
+ */
+type ActivityModalState = {
+  /** What the window opened with: the `createDraft` result for a new activity, the list row for an edit. */
+  base: ActivityDraft;
+  /** Every form change lands here; the class draft stays untouched until the commit. */
+  working: ActivityDraft;
+  /** Editing replaces the row that carries this key; creating appends the committed draft. */
+  editing: boolean;
+  errors: ActivityFieldErrors;
+  /** The exit animation is playing; the window answers no interaction until it is gone. */
+  closing: boolean;
+};
 
 function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetails }) {
   const navigate = useNavigate();
@@ -99,6 +121,8 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [newType, setNewType] = useState<ActivityType>('Speaking');
   const [errors, setErrors] = useState<DraftErrors>({});
+  // The activity window holds only local state: closing it without saving cannot touch the draft.
+  const [modal, setModal] = useState<ActivityModalState | null>(null);
   // What the server currently holds. Saving regenerates the local keys, so the key is not part of it.
   const [baseline, setBaseline] = useState(() => draftFingerprint(activities));
   const total = calculateTotalDuration(activities.map((activity) => activity.duration));
@@ -163,15 +187,49 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
   function goToInfo() {
     setStep('info');
   }
-  function addActivity() {
+  function openNewActivity() {
+    if (saving || modal !== null) return;
     const draft = createDraft(newType);
-    setActivities([...activities, draft]);
-    setSelectedKey(draft.key);
+    setModal({ base: draft, working: draft, editing: false, errors: {}, closing: false });
   }
-  function updateActivity(next: ActivityDraft) {
-    setActivities(activities.map((activity) => (activity.key === next.key ? next : activity)));
-    setErrors((current) => revalidate(current, next));
+  /** Opening a row edits a copy of it: the list itself only changes when the window commits. */
+  function openActivity(key: string) {
+    if (saving || modal !== null) return;
+    const activity = activities.find((current) => current.key === key);
+    if (!activity) return;
+    setSelectedKey(key);
+    setModal({ base: activity, working: activity, editing: true, errors: errors[key] ?? {}, closing: false });
   }
+  function updateModal(next: ActivityDraft) {
+    setModal((current) => (current === null || current.closing ? current
+      : { ...current, working: next, errors: refreshActivityFields(current.errors, next) }));
+  }
+  /** Saving one activity: a valid draft commits and closes; an invalid one stays open and marked. */
+  function commitModalActivity() {
+    if (saving || modal === null || modal.closing) return;
+    const parsed = activityDraftSchema.safeParse(modal.working);
+    if (!parsed.success) {
+      setModal({ ...modal, errors: activityFieldErrors(parsed.error.issues) });
+      return;
+    }
+    const next = parsed.data;
+    setActivities((current) => (modal.editing
+      ? current.map((activity) => (activity.key === next.key ? next : activity))
+      : [...current, next]));
+    setErrors((current) => (current[next.key] === undefined ? current
+      : Object.fromEntries(Object.entries(current).filter(([other]) => other !== next.key))));
+    setSelectedKey(next.key);
+    setModal({ ...modal, closing: true });
+  }
+  function requestCloseModal() {
+    if (saving || modal === null || modal.closing) return;
+    // Nothing really typed means nothing to lose: the fingerprint answers in both modes,
+    // a new activity against its `createDraft` base, an edit against the row it was opened from.
+    const dirty = draftFingerprint([modal.working]) !== draftFingerprint([modal.base]);
+    if (dirty && !window.confirm('La actividad tiene cambios sin guardar. Cerrarla los descartará. ¿Quieres continuar?')) return;
+    setModal({ ...modal, closing: true });
+  }
+  function closeModal() { setModal(null); }
   function removeActivity(key: string) {
     const index = activities.findIndex((activity) => activity.key === key);
     const remaining = activities.filter((activity) => activity.key !== key);
@@ -197,7 +255,11 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       const found = issueErrors(parsed.error.issues, activities);
       setErrors(found);
       const first = activities.find((activity) => found[activity.key]);
-      if (first) setSelectedKey(first.key);
+      if (first) {
+        // The first activity that needs attention opens in the window, where its exact fields show.
+        setSelectedKey(first.key);
+        setModal({ base: first, working: first, editing: true, errors: found[first.key] ?? {}, closing: false });
+      }
       return;
     }
     setErrors({});
@@ -212,7 +274,6 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
     const first = Object.values(fields)[0];
     if (first) listErrors[key] = first;
   }
-  const selected = activities.find((activity) => activity.key === selectedKey);
 
   return <section className="card lesson-editor">
     <p className="eyebrow">Tu espacio como profe</p><h1>{initial ? 'Editar clase' : 'Crear clase'}</h1>
@@ -259,11 +320,12 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
                 {ACTIVITY_TYPES.map((type) => <option key={type} value={type}>{ACTIVITY_TYPE_LABELS[type]}</option>)}
               </select>
             </div>
-            <Button variant="secondary" type="button" icon={Plus} onClick={addActivity}>Agregar actividad</Button>
+            <Button variant="secondary" type="button" icon={Plus} disabled={saving} onClick={openNewActivity}>Agregar actividad</Button>
           </div>
-          <ActivityList activities={activities} selectedKey={selectedKey} errors={listErrors}
-            onSelect={setSelectedKey} onRemove={removeActivity} onMove={moveActivity} />
-          {selected && <ActivityForm activity={selected} errors={errors[selected.key] ?? {}} onChange={updateActivity} />}
+          {/* Clicking a card opens the activity window; order and removal stay on the list rows. */}
+          <ActivityList activities={activities} selectedKey={modal && !modal.closing ? modal.working.key : null}
+            errors={listErrors}
+            onSelect={openActivity} onRemove={removeActivity} onMove={moveActivity} />
         </fieldset>}
       {mutation.isError && <p role="alert" className="error">{mutation.error instanceof TypeError
         ? 'No pudimos conectar. Conservamos tus cambios; comprueba si se guardaron antes de reintentar.'
@@ -288,6 +350,24 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
     {/* Outside the <form> and outside the draft on purpose: assigning a student must never mark the
         lesson as modified nor require saving first, so the section reads and writes on its own. */}
     {initial && <AssignedStudents lessonId={initial.id} userId={userId} />}
+    {/* The activity window lives outside the <form> on purpose: its buttons are plain pushes of a
+      local copy, and a save of the class can never be provoked from inside it. The fieldset keeps
+      the whole form inert while a save runs, portal included. */}
+    {modal && <Modal
+      title={modal.editing ? 'Editar actividad' : 'Nueva actividad'}
+      closing={modal.closing}
+      busy={saving}
+      onRequestClose={requestCloseModal}
+      onClosed={closeModal}
+      footer={<>
+        <Button variant="secondary" type="button" icon={X} disabled={saving} onClick={requestCloseModal}>Cancelar</Button>
+        <Button type="button" icon={Save} disabled={saving} onClick={commitModalActivity}>Guardar actividad</Button>
+      </>}
+    >
+      <fieldset className="modal-fieldset" disabled={saving} aria-label="Formulario de la actividad">
+        <ActivityForm activity={modal.working} errors={modal.errors} onChange={updateModal} />
+      </fieldset>
+    </Modal>}
     <Button variant="secondary" className="editor-back" icon={ArrowLeft} disabled={saving} onClick={back}>Volver a Mis clases</Button>
   </section>;
 }

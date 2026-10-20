@@ -137,11 +137,37 @@ it('shows lesson title, level, counter, activity title and duration in the heade
 
 it('names the type of the activity on screen, not another one', async () => {
   page();
-  expect(await screen.findByTestId('player-activity-type')).toHaveTextContent('Speaking');
+  expect(await screen.findByTestId('player-activity-type')).toHaveTextContent('Speaking · Conversation');
   await userEvent.click(screen.getByTestId('player-next'));
   expect(screen.getByTestId('player-activity-type')).toHaveTextContent('Writing');
   await userEvent.click(screen.getByTestId('player-next'));
   expect(screen.getByTestId('player-activity-type')).toHaveTextContent('Reading');
+});
+
+it('names the speaking subtype and renders the roleplay content', async () => {
+  vi.mocked(getLesson).mockResolvedValue({
+    ...lesson,
+    activities: [{
+      id: 'r1', type: 'Speaking', title: 'Roleplay', instructions: 'Practicad el diálogo.',
+      content: {
+        subtype: 'roleplay', context: 'Cena en un restaurante',
+        roles: [{ name: 'Waiter', description: 'Toma el pedido' }, { name: 'Customer', description: null }],
+        objective: 'Pedir la cuenta', material: null,
+        script: 'Waiter: Good evening!\nCustomer: Not yet.', practiceMode: 'scripted', questionsList: null,
+      }, order: 0, estimatedDuration: 10,
+    }],
+  });
+  page();
+  expect(await screen.findByTestId('player-activity-type')).toHaveTextContent('Speaking · Roleplay');
+  // Situation, roles, objective and the continuous script are all on screen.
+  expect(screen.getByText('Situación:')).toBeInTheDocument();
+  expect(screen.getByText('Cena en un restaurante')).toBeInTheDocument();
+  expect(screen.getByText('Pedir la cuenta')).toBeInTheDocument();
+  expect(screen.getByText(/Good evening!/)).toBeInTheDocument();
+  expect(screen.getByText(/Not yet\./)).toBeInTheDocument();
+  const list = screen.getByRole('list');
+  expect(within(list).getAllByRole('listitem').map((item) => item.textContent))
+    .toEqual(['Waiter — Toma el pedido', 'Customer']);
 });
 
 it('reads the progress, the activity, its type and its duration as one line of metadata', async () => {

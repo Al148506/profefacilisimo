@@ -162,7 +162,7 @@ public class ActivityEditingTests
         var questions = Enumerable.Range(0, 50).Select(_ => new string('q', 2000)).ToList();
 
         activity.Update("T", "I", new SpeakingContent(questions), 5);
-        Assert.Equal(50, Assert.IsType<SpeakingContent>(activity.ReadContent()).QuestionsList.Count);
+        Assert.Equal(50, Assert.IsType<SpeakingContent>(activity.ReadContent()).QuestionsList!.Count);
 
         activity.Update("T", "I", new ReadingContent(new string('x', 20000), questions), 5);
         Assert.Equal(20000, Assert.IsType<ReadingContent>(activity.ReadContent()).Text.Length);
@@ -200,5 +200,131 @@ public class ActivityEditingTests
             Assert.Throws<ArgumentException>(() => activity.Update(title, instructions, new SpeakingContent(["Pregunta"]), 5));
             Assert.Equal(accepted, (activity.Title, activity.Instructions, activity.EstimatedDuration));
         }
+    }
+
+    private static SpeakingContent Roleplay(
+        string context = "Cena en un restaurante",
+        IReadOnlyList<SpeakingRole>? roles = null,
+        RoleplayPracticeMode? practiceMode = RoleplayPracticeMode.Guided,
+        string? script = null) =>
+        new(null, SpeakingSubtype.Roleplay, context,
+            roles ?? [new SpeakingRole("Waiter", "Toma el pedido"), new SpeakingRole("Customer", null)],
+            null, null, script, practiceMode, null);
+
+    private static SpeakingContent Presentation(
+        string context = "Mi ciudad",
+        IReadOnlyList<string>? talkingPoints = null) =>
+        new(null, SpeakingSubtype.Presentation, context, null, null, null, null, null, talkingPoints);
+
+    [Fact]
+    public void LegacySpeakingContentWithoutSubtypeReadsAsConversation()
+    {
+        using var document = JsonDocument.Parse("""{ "questionsList": ["¿Qué tal?"] }""");
+
+        var content = Assert.IsType<SpeakingContent>(ActivityContent.Read(ActivityType.Speaking, document.RootElement));
+
+        Assert.Equal(SpeakingSubtype.Conversation, content.Subtype);
+        content.Validate();
+    }
+
+    [Fact]
+    public void RoleplayAndPresentationContentRoundTripWithEveryField()
+    {
+        var lesson = Create();
+        var activity = Speaking(lesson);
+        var roleplay = Roleplay(script: "Waiter: Good evening!\nCustomer: Not yet.", practiceMode: RoleplayPracticeMode.Scripted);
+        var roleplayWithExtras = roleplay with { Objective = "Pedir la cuenta", Material = "Tarjetas de vocabulario" };
+        var presentation = Presentation(talkingPoints: ["Lugares", "Comida"]);
+
+        activity.Update("Roleplay", "Instrucciones", roleplayWithExtras, 10);
+        var readRoleplay = Assert.IsType<SpeakingContent>(activity.ReadContent());
+        Assert.Equal(SpeakingSubtype.Roleplay, readRoleplay.Subtype);
+        Assert.Equal("Cena en un restaurante", readRoleplay.Context);
+        Assert.Equal([new SpeakingRole("Waiter", "Toma el pedido"), new SpeakingRole("Customer", null)], readRoleplay.Roles);
+        Assert.Equal("Pedir la cuenta", readRoleplay.Objective);
+        Assert.Equal("Tarjetas de vocabulario", readRoleplay.Material);
+        Assert.Equal("Waiter: Good evening!\nCustomer: Not yet.", readRoleplay.Script);
+        Assert.Equal(RoleplayPracticeMode.Scripted, readRoleplay.PracticeMode);
+
+        activity.Update("Presentación", "Instrucciones", presentation, 10);
+        var readPresentation = Assert.IsType<SpeakingContent>(activity.ReadContent());
+        Assert.Equal(SpeakingSubtype.Presentation, readPresentation.Subtype);
+        Assert.Equal(["Lugares", "Comida"], readPresentation.TalkingPoints);
+        Assert.Null(readPresentation.QuestionsList);
+    }
+
+    [Fact]
+    public void EnumsAreStoredAsCamelCaseStringsInContentJson()
+    {
+        var lesson = Create();
+        var activity = Speaking(lesson);
+
+        activity.Update("Roleplay", "Instrucciones", Roleplay(), 10);
+
+        Assert.Contains("\"subtype\":\"roleplay\"", activity.Content);
+        Assert.Contains("\"practiceMode\":\"guided\"", activity.Content);
+    }
+
+    [Fact]
+    public void SubtypeRulesRejectIncompatibleContentWithoutPartialUpdate()
+    {
+        SpeakingContent[] invalid =
+        [
+            // Conversation still needs its 1–50 questions.
+            new([], SpeakingSubtype.Conversation),
+            new(null, SpeakingSubtype.Conversation),
+            // Roleplay: context and roles are required within their own limits.
+            Roleplay(context: ""),
+            Roleplay(roles: [new SpeakingRole("Waiter", null)]),
+            Roleplay(roles: Enumerable.Range(0, 7).Select(i => new SpeakingRole($"Rol {i}", null)).ToList()),
+            Roleplay(roles: [new SpeakingRole(new string('n', 101), null), new SpeakingRole("B", null)]),
+            Roleplay(roles: [new SpeakingRole("A", new string('d', 501)), new SpeakingRole("B", null)]),
+            // Roleplay: the practice mode is mandatory, and scripted needs a non-blank script.
+            Roleplay(practiceMode: null),
+            Roleplay(practiceMode: RoleplayPracticeMode.Scripted, script: null),
+            Roleplay(practiceMode: RoleplayPracticeMode.Scripted, script: "   "),
+            // Presentation: context is required; talking points stay optional but bounded.
+            Presentation(context: "   "),
+            Presentation(talkingPoints: Enumerable.Range(0, 21).Select(i => $"Punto {i}").ToList()),
+            Presentation(talkingPoints: [new string('p', 501)])
+        ];
+
+        foreach (var content in invalid)
+        {
+            var lesson = Create();
+            var activity = Speaking(lesson);
+            var before = Snapshot(activity);
+
+            Assert.Throws<ArgumentException>(() => activity.Update("Otro título", "Otras instrucciones", content, 20));
+
+            Assert.Equal(before, Snapshot(activity));
+        }
+    }
+
+    [Fact]
+    public void ExactSubtypeLimitsAreAccepted()
+    {
+        var lesson = Create();
+        var activity = Speaking(lesson);
+        var roleplay = Roleplay(
+            context: new string('c', 2000),
+            roles: [new SpeakingRole(new string('n', 100), new string('d', 500)), new SpeakingRole("B", null)],
+            practiceMode: RoleplayPracticeMode.Scripted,
+            script: new string('s', 10000)) with { Objective = new string('o', 2000), Material = new string('m', 5000) };
+
+        activity.Update("T", "I", roleplay, 5);
+        var readRoleplay = Assert.IsType<SpeakingContent>(activity.ReadContent());
+        Assert.Equal(2000, readRoleplay.Context!.Length);
+        Assert.Equal(100, readRoleplay.Roles![0].Name.Length);
+        Assert.Equal(500, readRoleplay.Roles[0].Description!.Length);
+        Assert.Equal(2000, readRoleplay.Objective!.Length);
+        Assert.Equal(5000, readRoleplay.Material!.Length);
+        Assert.Equal(10000, readRoleplay.Script!.Length);
+
+        activity.Update("T", "I", Presentation(
+            talkingPoints: Enumerable.Range(0, 20).Select(_ => new string('p', 500)).ToList()), 5);
+        var readPresentation = Assert.IsType<SpeakingContent>(activity.ReadContent());
+        Assert.Equal(20, readPresentation.TalkingPoints!.Count);
+        Assert.Equal(500, readPresentation.TalkingPoints[0].Length);
     }
 }

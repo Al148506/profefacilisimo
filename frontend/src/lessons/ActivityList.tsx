@@ -1,6 +1,6 @@
 import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '../components/Button';
-import { ACTIVITY_TYPE_LABELS, type ActivityDraft } from './lesson-schema';
+import { activityTypeLabel, type ActivityDraft } from './lesson-schema';
 
 type ActivityListProps = {
   activities: readonly ActivityDraft[];
@@ -39,7 +39,7 @@ export default function ActivityList({ activities, selectedKey, errors, onSelect
             aria-describedby={error ? errorId : undefined} onClick={() => onSelect(activity.key)}>
             <span className="activity-position" aria-hidden="true">{index + 1}</span>
             <span className="activity-name">{name}</span>
-            <span className="activity-type">{ACTIVITY_TYPE_LABELS[activity.type]}</span>
+            <span className="activity-type">{activityTypeLabel(activity.type, activity.content)}</span>
             <span className="activity-duration">{activity.duration === null ? 'Sin duración' : activity.duration + ' min'}</span>
           </button>
           <div className="activity-order">

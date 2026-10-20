@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import type { LessonActivityDto } from './lesson-api';
 import type { ActivityType } from './lesson-schema';
 
@@ -33,7 +34,7 @@ export default function ActivityView({ activity }: ActivityViewProps) {
 function typeBody(type: ActivityType, content: Record<string, unknown>) {
   switch (type) {
     case 'Speaking':
-      return <ActivityItems values={asItems(content.questionsList)} />;
+      return speakingBody(content);
     case 'Reading':
       return <>
         <ActivityParagraph className="player-activity-text" value={asText(content.text)} />
@@ -49,6 +50,57 @@ function typeBody(type: ActivityType, content: Record<string, unknown>) {
     default:
       return null;
   }
+}
+
+/** Rows before SPEC 09 (and unknown values) read as conversation, exactly like the domain. */
+function asSubtype(value: unknown): string {
+  return value === 'roleplay' || value === 'presentation' ? value : 'conversation';
+}
+
+function speakingBody(content: Record<string, unknown>) {
+  const subtype = asSubtype(content.subtype);
+  if (subtype === 'roleplay') {
+    return <>
+      <ActivityLabeled label="Situación:" value={asText(content.context)} />
+      <ActivityItems values={asRoles(content.roles)} />
+      <ActivityLabeled label="Objetivo:" value={asText(content.objective)} />
+      <ActivityLabeled label="Material de apoyo:" value={asText(content.material)} />
+      <ActivityScript value={asText(content.script)} />
+    </>;
+  }
+  if (subtype === 'presentation') {
+    return <>
+      <ActivityLabeled label="Tema:" value={asText(content.context)} />
+      <ActivityItems values={asItems(content.talkingPoints)} />
+    </>;
+  }
+  return <ActivityItems values={asItems(content.questionsList)} />;
+}
+
+/** A roleplay paragraph with its label; a blank value renders nothing rather than inventing content. */
+function ActivityLabeled({ label, value }: { label: string; value: string }) {
+  if (value.trim() === '') return null;
+  return <p className="player-activity-text"><strong>{label}</strong>{' ' + value}</p>;
+}
+
+/** The script keeps its line breaks as real breaks, never as new elements. */
+function ActivityScript({ value }: { value: string }) {
+  if (value.trim() === '') return null;
+  return <p className="player-activity-text">
+    {value.split('\n').map((line, index) => <Fragment key={index}>{index > 0 && <br />}{line}</Fragment>)}
+  </p>;
+}
+
+/** One line per participant: name plus optional description; malformed roles are dropped. */
+function asRoles(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((role) => {
+    const item = (role ?? {}) as Record<string, unknown>;
+    const name = typeof item.name === 'string' ? item.name.trim() : '';
+    if (name === '') return [];
+    const description = typeof item.description === 'string' ? item.description.trim() : '';
+    return [description === '' ? name : name + ' — ' + description];
+  });
 }
 
 /** A block of text that only exists when it has something to show. */

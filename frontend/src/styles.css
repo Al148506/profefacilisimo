@@ -133,24 +133,74 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid var(-
 /* Compact controls: the list row has to keep the title, the type and the duration on one line. */
 .activity-order button, .activity-remove { padding: 10px 12px; font-size: 14px; }
 .activity-error { margin: 10px 0 0; font-size: 13px; }
-.activity-form { border: 1px solid var(--pf-line); border-radius: 12px; padding: 20px; background: #fbfcf7; }
-.activity-form h3 { font-size: 16px; margin: 0 0 16px; }
+/* The form now lives inside the activity window, so it flows as a plain column: the modal itself
+   is the panel, and the old card wrapper would double-frame the fields. */
+.activity-form { display: flex; flex-direction: column; }
 .activity-field { display: flex; flex-direction: column; }
 .activity-rows { border-top: 1px solid #e6ebdd; margin-top: 12px; padding-top: 14px; }
 .activity-rows-legend { font-weight: 700; font-size: 14px; color: var(--pf-muted); margin: 0 0 10px; }
 .activity-row { display: flex; flex-direction: column; border-bottom: 1px solid #eef1e8; padding-bottom: 10px; margin-bottom: 10px; }
 .activity-row:last-of-type { border-bottom: 0; }
 .activity-row > button { align-self: flex-end; }
+.activity-row-actions { display: flex; gap: 8px; justify-content: flex-end; align-self: flex-end; }
 .activity-rows > button { align-self: flex-start; }
+/* Compact role rows: name and description share one grid line, and the remove action is a bare
+   icon, so even six roles read as six short rows instead of six stacked blocks. */
+.activity-role { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 0 10px; align-items: start; border-bottom: 1px solid #eef1e8; padding-bottom: 10px; margin-bottom: 10px; }
+.activity-role:last-of-type { border-bottom: 0; }
+.activity-role-field { display: flex; flex-direction: column; }
+.activity-role-remove { padding: 12px; }
+/* The collapsible advanced block: optional fields stay out of the way until they are needed,
+   or until an error inside forces them back into view. */
+.activity-advanced { border-top: 1px solid #e6ebdd; margin-top: 14px; padding-top: 6px; }
+.activity-advanced-toggle { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 8px 0; font: inherit; font-weight: 700; font-size: 14px; color: var(--pf-muted); cursor: pointer; text-align: left; }
+.activity-advanced-toggle:hover { background: none; color: var(--pf-ink); }
+.activity-advanced-body { display: flex; flex-direction: column; gap: 14px; padding-top: 12px; }
+.hint { font-size: 13px; color: var(--pf-muted); }
 @media (max-width: 600px) {
   .activity-add, .activity-item-main { flex-direction: column; align-items: stretch; }
   .activity-add > div, .activity-select { flex-basis: auto; }
   .activity-order, .activity-remove { width: 100%; }
   .activity-order button { flex: 1 1 0; }
+  /* Roles stack: name, then description, with the remove icon at the end of the row. */
+  .activity-role { grid-template-columns: 1fr; gap: 10px; }
+  .activity-role-remove { justify-self: end; }
   /* The two wizard actions stack, keeping the main one last so it stays the closest to the thumb. */
   .editor-actions { flex-direction: column-reverse; align-items: stretch; }
   .editor-steps-list { gap: 6px; }
   .editor-step { font-size: 13px; }
+}
+
+/* The activity window: a centered dialog over the live editor. The dimmed backdrop keeps the page
+   readable around it, the panel never exceeds the viewport, and only the body scrolls while the
+   header and the actions stay fixed. */
+.pf-modal-overlay { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 32px 20px; background: rgba(23, 59, 55, .45); animation: pf-modal-fade-in .18s ease-out; }
+.pf-modal-overlay.is-closing { animation: pf-modal-fade-out .16s ease-in forwards; }
+.pf-modal { position: relative; display: flex; flex-direction: column; width: min(100%, 760px); max-height: min(88dvh, 920px); background: #fffefb; border: 1px solid var(--pf-line); border-radius: 24px; box-shadow: 0 24px 60px rgba(23, 59, 55, .28); animation: pf-modal-slide-in .18s ease-out; outline: none; }
+.pf-modal.is-closing { animation: pf-modal-slide-out .16s ease-in forwards; }
+.pf-modal-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; flex: 0 0 auto; padding: 22px 56px 0 26px; }
+.pf-modal-title { font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+/* The close control sits flush with the top-right corner of the window, above the title's wrap. */
+.pf-modal-close { position: absolute; top: 14px; right: 14px; z-index: 1; background: transparent; border-color: transparent; color: var(--pf-muted); padding: 10px; }
+.pf-modal-close:hover { background: var(--pf-tint); border-color: transparent; color: var(--pf-ink); }
+.pf-modal-body { flex: 1 1 auto; overflow-y: auto; padding: 18px 26px; }
+.pf-modal-footer { display: flex; flex-wrap: wrap; gap: 12px; flex: 0 0 auto; padding: 16px 26px 22px; border-top: 1px solid var(--pf-line); }
+.pf-modal-footer > button { flex: 1 1 160px; }
+/* Same reset the editor's fieldsets use: the window's form is a layout group, not a visible box. */
+.modal-fieldset { display: flex; flex-direction: column; border: 0; padding: 0; margin: 0; min-width: 0; }
+@keyframes pf-modal-fade-in { from { opacity: 0; } }
+@keyframes pf-modal-fade-out { to { opacity: 0; } }
+@keyframes pf-modal-slide-in { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+@keyframes pf-modal-slide-out { to { opacity: 0; transform: translateY(12px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) {
+  .pf-modal-overlay, .pf-modal, .pf-modal-overlay.is-closing, .pf-modal.is-closing { animation: none; }
+}
+@media (max-width: 600px) {
+  .pf-modal-overlay { padding: 16px 12px; }
+  .pf-modal { max-height: 92dvh; border-radius: 18px; }
+  .pf-modal-header, .pf-modal-body, .pf-modal-footer { padding-left: 18px; padding-right: 18px; }
+  .pf-modal-header { padding-right: 48px; }
+  .pf-modal-footer { flex-direction: column-reverse; align-items: stretch; }
 }
 
 /* Player. Every class is frozen by the contract (C3) and prefixed `lesson-player-`/`player-activity-`,
