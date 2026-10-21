@@ -81,7 +81,7 @@ test('create a student, see it listed and open its profile', async ({ page }) =>
 test('assign from the profile and from the lesson editor, then unassign from both sides', async ({ page }) => {
   const auth = await signIn(page);
   const lessonTitle = 'Clase asignable ' + Date.now();
-  await createLesson(page, auth, lessonTitle);
+  const lessonId = await createLesson(page, auth, lessonTitle);
 
   await page.getByRole('link', { name: 'Estudiantes' }).click();
   await page.getByRole('link', { name: 'Crear estudiante' }).click();
@@ -96,22 +96,44 @@ test('assign from the profile and from the lesson editor, then unassign from bot
   await expect(page.getByRole('heading', { name: lessonTitle })).toBeVisible();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 
-  // From the editor: the same pair is already assigned, so it is not offered again.
+  // From the editor: the third step already lists the pair, so it is not offered again.
   await page.goto('/');
   await page.getByRole('link', { name: 'Editar ' + lessonTitle }).click();
-  const section = page.getByTestId('assigned-students');
-  await expect(section).toBeVisible();
-  await expect(section.getByRole('link', { name, exact: true })).toBeVisible();
-  await expect(section.getByRole('option', { name: name + ' · B1' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  const step = page.getByTestId('students-step');
+  await expect(step).toBeVisible();
+  await expect(step.getByRole('link', { name, exact: true })).toBeVisible();
+  await expect(step.getByRole('option', { name: name + ' · A2' })).toHaveCount(0);
 
-  // Unassigning from the lesson side never turns the section into a draft change.
-  await section.getByRole('button', { name: 'Quitar asignación de ' + name }).click();
-  await expect(section.getByText('Esta clase todavía no tiene estudiantes asignados.')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Quitar asignación de ' + name })).toHaveCount(0);
+  // Staging the removal writes nothing: the pair is still on the server until the class is saved.
+  await step.getByRole('button', { name: 'Quitar a ' + name }).click();
+  const still = await page.request.get('/api/lessons/' + lessonId + '/students',
+    { headers: { ...auth, Origin: 'http://localhost:5173', 'X-Requested-With': 'Profefacilisimo' } });
+  expect(((await still.json()) as { name: string }[]).map((student) => student.name)).toContain(name);
 
-  // Back on the profile the lesson is gone, and the student still exists.
+  // Saving applies the staged removal, and the emptied step says so.
+  const savedPut = page.waitForResponse((response) =>
+    response.url().includes('/api/lessons/' + lessonId) && response.request().method() === 'PUT');
+  await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
+  expect((await savedPut).status()).toBe(200);
+  await page.getByRole('button', { name: 'Aceptar' }).click();
+  await expect(step.getByText('Todavía no has asignado estudiantes a esta clase.')).toBeVisible();
+
+  // Assigning from the editor is the same step reversed: stage the pick, save, and the pair is back.
+  await step.getByLabel('Asignar estudiante').selectOption({ label: name + ' · A2' });
+  const resavedPut = page.waitForResponse((response) =>
+    response.url().includes('/api/lessons/' + lessonId) && response.request().method() === 'PUT');
+  await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
+  expect((await resavedPut).status()).toBe(200);
+  await page.getByRole('button', { name: 'Aceptar' }).click();
+  await expect(step.getByRole('link', { name, exact: true })).toBeVisible();
+
+  // Back on the profile the lesson can still be unassigned from that side.
   await page.goto('/students');
   await page.getByRole('link', { name, exact: true }).click();
+  await expect(page.getByRole('heading', { name: lessonTitle })).toBeVisible();
+  await page.getByRole('button', { name: 'Quitar asignación de ' + lessonTitle }).click();
   await expect(page.getByText('Este estudiante todavía no tiene clases asignadas.')).toBeVisible();
   await expect(page.getByRole('heading', { name })).toBeVisible();
 });
@@ -136,12 +158,14 @@ test('trash a student, restore it, keep its assignments, and delete it definitiv
   await expect(page.getByRole('heading', { name: 'Mis estudiantes' })).toBeVisible();
   await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0);
 
-  // A trashed student keeps its assignments and shows the mark without the unassign action.
+  // A trashed student keeps its assignment into the third step, marked and without a removal action.
   await page.goto('/');
   await page.getByRole('link', { name: 'Editar ' + lessonTitle }).click();
-  const section = page.getByTestId('assigned-students');
-  await expect(section.getByTestId('trash-mark')).toHaveText('En papelera');
-  await expect(section.getByRole('button', { name: 'Quitar asignación de ' + name })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  const step = page.getByTestId('students-step');
+  await expect(step.getByTestId('trash-mark')).toHaveText('En papelera');
+  await expect(step.getByRole('button', { name: 'Quitar a ' + name })).toHaveCount(0);
 
   // A trashed lesson is likewise marked on the profile and cannot be unassigned until restored.
   await page.getByRole('button', { name: 'Volver a Mis clases' }).click();
@@ -169,7 +193,10 @@ test('trash a student, restore it, keep its assignments, and delete it definitiv
 
   await page.goto('/');
   await page.getByRole('link', { name: 'Editar ' + lessonTitle }).click();
-  await expect(page.getByTestId('assigned-students').getByText('Esta clase todavía no tiene estudiantes asignados.')).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await expect(page.getByTestId('students-step').getByText('Todavía no has asignado estudiantes a esta clase.')).toBeVisible();
+  await page.getByRole('button', { name: 'Información de la clase', exact: true }).click();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue(lessonTitle);
 });
 

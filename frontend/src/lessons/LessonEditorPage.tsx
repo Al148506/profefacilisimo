@@ -10,10 +10,14 @@ import Modal from '../components/Modal';
 import { LEVELS } from '../levels';
 import ActivityForm, { type ActivityFieldErrors } from './ActivityForm';
 import ActivityList from './ActivityList';
-import AssignedStudents from '../students/AssignedStudents';
 import StepIndicator from './StepIndicator';
+import StudentsStep from './StudentsStep';
 import { STEP_LABELS, type EditorStep } from './editor-steps';
-import { notifyLessonSaveFailed, notifyLessonSaved } from '../notifications';
+import { notifyLessonSaveFailed, notifyLessonSaved, notifyLessonSavedWithIssues } from '../notifications';
+import {
+  assignStudentToLesson, listAssignedStudents, listStudents, unassignStudentFromLesson,
+  type AssignedStudent,
+} from '../students/student-api';
 import {
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS, activityDraftSchema, activityIssueIndex, createDraft, draftFingerprint,
   draftFromSaved, lessonDraftSchema, lessonSchema, toActivityInput,
@@ -27,11 +31,18 @@ type DraftErrors = Record<string, ActivityFieldErrors>;
 
 /**
  * Where a mount of the editor starts. The step lives in component state, but creating a lesson
- * navigates to its `/edit` route, which mounts a fresh editor: this carries the activities step
- * across that remount so the teacher lands where the save was pressed. Read on mount and then reset,
- * so a later navigation — the list, the player — always opens on the metadata again.
+ * navigates to its `/edit` route, which mounts a fresh editor: this carries the step where the
+ * save was pressed across that remount so the teacher lands where they left. Read on mount and
+ * then reset, so a later navigation — the list, the player — always opens on the metadata again.
  */
 let carriedStep: EditorStep = 'info';
+
+/** Two assignment sets are the same when they hold exactly the same student ids. */
+function sameStudents(a: readonly AssignedStudent[], b: readonly AssignedStudent[]): boolean {
+  if (a.length !== b.length) return false;
+  const ids = new Set(b.map((student) => student.id));
+  return a.every((student) => ids.has(student.id));
+}
 
 /** Turns the schema issues into per-activity field messages, keyed by the draft's local key. */
 function issueErrors(issues: readonly { path: readonly PropertyKey[]; message: string }[], activities: readonly ActivityDraft[]): DraftErrors {
@@ -127,11 +138,75 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
   const [baseline, setBaseline] = useState(() => draftFingerprint(activities));
   const total = calculateTotalDuration(activities.map((activity) => activity.duration));
   const activitiesDirty = draftFingerprint(activities) !== baseline;
+  // The staged selection of the third step. It lives in the editor, not in the step, so walking
+  // back and forth never drops it, and it only reaches the server through the save below.
+  const [selectedStudents, setSelectedStudents] = useState<AssignedStudent[]>([]);
+  const assignmentsSeeded = useRef(false);
+  // A new lesson has nothing to read assignments from: the query stays disabled until it has an id.
+  const assignedQuery = useQuery({
+    queryKey: ['assigned-students', initial?.id ?? 'new'],
+    queryFn: ({ signal }) => listAssignedStudents(initial!.id, signal),
+    enabled: !!initial,
+    retry: false,
+  });
+  const candidatesQuery = useQuery({
+    queryKey: ['students', userId, 'active'],
+    queryFn: ({ signal }) => listStudents({ search: '', level: '' }, signal, 'active'),
+    retry: false,
+  });
+  // The server's assignments seed the staged selection exactly once, so a later refetch can never
+  // overwrite what the teacher has been staging meanwhile.
+  useEffect(() => {
+    if (!initial || assignmentsSeeded.current || !assignedQuery.isSuccess) return;
+    assignmentsSeeded.current = true;
+    setSelectedStudents(assignedQuery.data ?? []);
+  }, [initial, assignedQuery.isSuccess, assignedQuery.data]);
+  const selectedStudentIds = new Set(selectedStudents.map((student) => student.id));
+  const candidates = (candidatesQuery.data ?? []).filter((student) => !selectedStudentIds.has(student.id));
+  // Until the server's list has been read there is no way to tell "untouched" from "emptied on
+  // purpose", so the selection is not dirty and, more importantly, no diff will ever be applied.
+  const studentsDirty = initial
+    ? (assignedQuery.data ? !sameStudents(selectedStudents, assignedQuery.data) : false)
+    : selectedStudents.length > 0;
+
+  /**
+   * Applies the staged selection on top of the saved lesson: additions with POST, explicit removals
+   * with DELETE, one pair at a time. An untouched selection writes nothing — not changing the
+   * assignments and clearing them on purpose are different operations — and while the server state
+   * has not been read in an edit, the step keeps its hands off entirely. A failed pair is collected
+   * by name instead of aborting the rest: the lesson itself is already saved, so the save must never
+   * be repeated and would duplicate a new class.
+   */
+  async function applyAssignments(lessonId: string): Promise<string[]> {
+    if (initial && !assignedQuery.data) return [];
+    const assigned = assignedQuery.data ?? [];
+    if (sameStudents(selectedStudents, assigned)) return [];
+    const assignedIds = new Set(assigned.map((student) => student.id));
+    const selectedIds = new Set(selectedStudents.map((student) => student.id));
+    const failures: string[] = [];
+    const added: AssignedStudent[] = [];
+    for (const student of selectedStudents.filter((s) => !assignedIds.has(s.id))) {
+      try { added.push(await assignStudentToLesson(lessonId, student.id)); }
+      catch { failures.push(student.name); }
+    }
+    const removedIds = new Set<string>();
+    for (const student of assigned.filter((s) => !selectedIds.has(s.id))) {
+      try { await unassignStudentFromLesson(lessonId, student.id); removedIds.add(student.id); }
+      catch { failures.push(student.name); }
+    }
+    // The selection ends up where the server really is: failed adds drop out, failed removals come back.
+    setSelectedStudents([...assigned.filter((s) => !removedIds.has(s.id)), ...added]);
+    void client.invalidateQueries({ queryKey: ['assigned-students', lessonId] });
+    return failures;
+  }
 
   const mutation = useMutation({
-    mutationFn: (values: SaveLessonValues) => saveLesson(values, initial?.id),
+    mutationFn: async (values: SaveLessonValues) => {
+      const saved = await saveLesson(values, initial?.id);
+      return { saved, assignmentFailures: await applyAssignments(saved.id) };
+    },
     retry: false,
-    onSuccess: (saved) => {
+    onSuccess: ({ saved, assignmentFailures }) => {
       const canonical = saved.activities.map(draftFromSaved);
       const index = activities.findIndex((activity) => activity.key === selectedKey);
       form.reset({ title: saved.title, level: saved.level, topic: saved.topic ?? '', objective: saved.objective });
@@ -145,8 +220,10 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       void client.invalidateQueries({ queryKey: ['lessons', userId] });
       if (!initial) { carriedStep = step; bypassBlocker.current = true; navigate('/lessons/' + saved.id + '/edit', { replace: true }); }
       // The alert is a complement: it fires after the server confirmed and the state is already
-      // settled, so it cannot interfere with the save or with the navigation above.
-      void notifyLessonSaved();
+      // settled, so it cannot interfere with the save or with the navigation above. The class is
+      // saved in both cases; the warning only names the assignments that did not make it.
+      if (assignmentFailures.length > 0) void notifyLessonSavedWithIssues(assignmentFailures);
+      else void notifyLessonSaved();
     },
     onError: (error) => {
       // The draft is kept exactly as it is: a failed save never discards the teacher's work.
@@ -156,7 +233,7 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
     },
   });
 
-  const dirty = form.formState.isDirty || activitiesDirty;
+  const dirty = form.formState.isDirty || activitiesDirty || studentsDirty;
   const saving = mutation.isPending;
   const blocker = useBlocker(() => !bypassBlocker.current && (dirty || saving));
 
@@ -186,6 +263,26 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
   /** Going back never validates and never discards: the draft keeps every field as it was typed. */
   function goToInfo() {
     setStep('info');
+  }
+  /** The students step asks nothing of its own: activities are optional and re-checked at the save. */
+  function goToStudents() {
+    setStep('students');
+  }
+  function goToActivitiesStep() {
+    setStep('activities');
+  }
+  /** Staging an add: the candidate leaves the picker and joins the selection, nothing is sent. */
+  function addStudent(studentId: string) {
+    const candidate = candidates.find((student) => student.id === studentId);
+    if (!candidate || selectedStudentIds.has(studentId)) return;
+    setSelectedStudents((current) => [...current, {
+      id: candidate.id, name: candidate.name, level: candidate.level,
+      inTrash: !!candidate.deletedAt, assignedAt: new Date().toISOString(),
+    }]);
+  }
+  /** Staging a removal: the pair only leaves the server if the teacher saves afterwards. */
+  function removeStudent(studentId: string) {
+    setSelectedStudents((current) => current.filter((student) => student.id !== studentId));
   }
   function openNewActivity() {
     if (saving || modal !== null) return;
@@ -249,11 +346,13 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
     // The metadata is re-checked here only to cover a programmatic submit: the plain path to this
     // point already went through `goToActivities`, which refuses to advance on invalid metadata.
     if (!(await form.trigger())) { setStep('info'); return; }
-    // The whole set is validated before anything is written: one invalid activity stops the save.
+    // The whole set is validated before anything is written: one invalid activity stops the save
+    // and walks the teacher back to the step where the activity lives.
     const parsed = lessonDraftSchema.safeParse({ ...values, activities });
     if (!parsed.success) {
       const found = issueErrors(parsed.error.issues, activities);
       setErrors(found);
+      setStep('activities');
       const first = activities.find((activity) => found[activity.key]);
       if (first) {
         // The first activity that needs attention opens in the window, where its exact fields show.
@@ -310,7 +409,8 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
           <textarea id="objective" rows={5} {...form.register('objective')} aria-invalid={!!form.formState.errors.objective} aria-describedby="objective-error" />
           <small className="error" id="objective-error">{form.formState.errors.objective?.message}</small>
         </fieldset>
-        : <fieldset className="activity-section" disabled={saving}>
+        : step === 'activities'
+        ? <fieldset className="activity-section" disabled={saving}>
           <legend>{STEP_LABELS.activities}</legend>
           <p className="activity-total">Duración total: <strong>{formatLessonDuration(total)}</strong></p>
           <div className="activity-add">
@@ -326,30 +426,44 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
           <ActivityList activities={activities} selectedKey={modal && !modal.closing ? modal.working.key : null}
             errors={listErrors}
             onSelect={openActivity} onRemove={removeActivity} onMove={moveActivity} />
+        </fieldset>
+        : <fieldset className="students-step-section" disabled={saving}>
+          <legend>{STEP_LABELS.students}</legend>
+          <StudentsStep
+            selected={selectedStudents}
+            candidates={candidates}
+            loading={(!!initial && assignedQuery.isPending) || candidatesQuery.isPending}
+            loadError={(!!initial && assignedQuery.isError) || candidatesQuery.isError}
+            onRetry={() => { void assignedQuery.refetch(); void candidatesQuery.refetch(); }}
+            onAdd={addStudent}
+            onRemove={removeStudent}
+          />
         </fieldset>}
       {mutation.isError && <p role="alert" className="error">{mutation.error instanceof TypeError
         ? 'No pudimos conectar. Conservamos tus cambios; comprueba si se guardaron antes de reintentar.'
         : mutation.error.message}</p>}
       {/* The saved confirmation is the `notifyLessonSaved` alert above: this screen deliberately has
           no second success channel, so the teacher hears the same thing once per save. */}
-      {/* Keyed so the two bars never share a DOM node: «Continuar» and «Guardar clase» sit in the same
-          position, and reusing the node would rewrite its type to submit while the click that changed
-          the step is still being dispatched, so the browser would then submit the form on its own. */}
+      {/* Keyed so the bars never share a DOM node: «Continuar», «Siguiente» and «Guardar clase» sit in
+          the same position, and reusing the node would rewrite its type to submit while the click that
+          changed the step is still being dispatched, so the browser would then submit the form on its own. */}
       <div className="editor-actions">
         {step === 'info'
           ? <Fragment key="info">
             <Button variant="secondary" type="button" icon={X} disabled={saving} onClick={back}>Cancelar</Button>
             <Button type="button" icon={ArrowRight} disabled={saving} onClick={() => void goToActivities()}>Continuar</Button>
           </Fragment>
-          : <Fragment key="activities">
+          : step === 'activities'
+          ? <Fragment key="activities">
             <Button variant="secondary" type="button" icon={ArrowLeft} disabled={saving} onClick={goToInfo}>Atrás</Button>
+            <Button type="button" icon={ArrowRight} disabled={saving} onClick={goToStudents}>Siguiente</Button>
+          </Fragment>
+          : <Fragment key="students">
+            <Button variant="secondary" type="button" icon={ArrowLeft} disabled={saving} onClick={goToActivitiesStep}>Atrás</Button>
             <Button type="submit" icon={Save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar clase'}</Button>
           </Fragment>}
       </div>
     </form>
-    {/* Outside the <form> and outside the draft on purpose: assigning a student must never mark the
-        lesson as modified nor require saving first, so the section reads and writes on its own. */}
-    {initial && <AssignedStudents lessonId={initial.id} userId={userId} />}
     {/* The activity window lives outside the <form> on purpose: its buttons are plain pushes of a
       local copy, and a save of the class can never be provoked from inside it. The fieldset keeps
       the whole form inert while a save runs, portal included. */}

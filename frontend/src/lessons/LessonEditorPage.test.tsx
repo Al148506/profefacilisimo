@@ -5,22 +5,32 @@ import { createMemoryRouter, Link, Route, RouterProvider, Routes } from 'react-r
 import { beforeEach, expect, it, vi } from 'vitest';
 import LessonEditorPage from './LessonEditorPage';
 import { getLesson, saveLesson, lessonDetailKey, LessonSaveError, type LessonDetails } from './lesson-api';
+import { assignStudentToLesson, listAssignedStudents, listStudents, unassignStudentFromLesson, type AssignedStudent, type StudentListItem } from '../students/student-api';
 import { lessonDraftSchema, lessonSchema } from './lesson-schema';
-import { notifyLessonSaved } from '../notifications';
+import { notifyLessonSaved, notifyLessonSavedWithIssues } from '../notifications';
 vi.mock('../auth', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
 vi.mock('./lesson-api', async (original) => ({ ...await original<typeof import('./lesson-api')>(), getLesson: vi.fn(), saveLesson: vi.fn() }));
-// The integration phase mounts the assigned-students section inside the editor. This suite is about
-// the draft, so the section is stubbed empty: it must never reach the real transport from here.
+// The third step reads assignments and candidates, and the save applies the staged diff through
+// these four functions. The suite drives all of it with stubs: nothing here reaches the transport.
 vi.mock('../students/student-api', async (original) => ({
   ...await original<typeof import('../students/student-api')>(),
-  listAssignedStudents: vi.fn(async () => []), listStudents: vi.fn(async () => []),
+  listAssignedStudents: vi.fn(), listStudents: vi.fn(), assignStudentToLesson: vi.fn(), unassignStudentFromLesson: vi.fn(),
 }));
 // The alerts are SweetAlert2, which mounts its own container on <body>: outside every React root, so
 // the testing-library cleanup cannot reach it, and an open popup marks the app `aria-hidden` and
 // hides it from role queries. Stubbing them keeps this suite about the draft itself.
-vi.mock('../notifications', () => ({ notifyLessonSaved: vi.fn(), notifyLessonSaveFailed: vi.fn() }));
+vi.mock('../notifications', () => ({ notifyLessonSaved: vi.fn(), notifyLessonSaveFailed: vi.fn(), notifyLessonSavedWithIssues: vi.fn() }));
 const detail: LessonDetails = { id: 'l1', title: 'Original', level: 'B1', topic: 'Tema', objective: 'Objetivo', createdAt: '2026-09-17', updatedAt: '2026-09-17', deletedAt: null, estimatedDuration: 60, activities: [] };
-beforeEach(() => { vi.resetAllMocks(); vi.mocked(getLesson).mockResolvedValue(detail); });
+const ana: AssignedStudent = { id: 's1', name: 'Ana', level: 'A2', inTrash: false, assignedAt: '2026-09-17' };
+const carla: AssignedStudent = { id: 's3', name: 'Carla', level: 'B2', inTrash: false, assignedAt: '2026-09-17' };
+const bruno: StudentListItem = { id: 's2', name: 'Bruno', level: 'B1', interests: null, assignedLessonCount: 0, updatedAt: '2026-09-17', deletedAt: null };
+const brunoAssigned: AssignedStudent = { id: 's2', name: 'Bruno', level: 'B1', inTrash: false, assignedAt: '2026-09-18' };
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(getLesson).mockResolvedValue(detail);
+  vi.mocked(listAssignedStudents).mockResolvedValue([]);
+  vi.mocked(listStudents).mockResolvedValue([]);
+});
 function page(path = '/lessons/l1/edit') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   function TestRoutes() {
@@ -54,8 +64,10 @@ it('creates using trimmed metadata, supports topic datalist, and opens the saved
   await userEvent.type(topicInput, ' Tema ');
   await userEvent.type(screen.getByLabelText('Objetivo'), ' Objetivo ');
   await userEvent.selectOptions(screen.getByLabelText('Nivel'), 'B1');
-  // Creating walks the whole wizard: «Continuar» reaches the activities, «Guardar clase» sends.
+  // Creating walks the whole wizard: «Continuar» reaches the activities, «Siguiente» the students,
+  // and «Guardar clase» sends.
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
   expect(saveLesson).toHaveBeenCalledWith({ title: 'Nueva', level: 'B1', topic: 'Tema', objective: 'Objetivo', activities: [] }, undefined);
@@ -68,6 +80,7 @@ it('creates lesson successfully without topic', async () => {
   await userEvent.type(screen.getByLabelText('Objetivo'), 'Objetivo');
   await userEvent.selectOptions(screen.getByLabelText('Nivel'), 'A2');
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
   expect(saveLesson).toHaveBeenCalledWith({ title: 'Sin Tema', level: 'A2', topic: '', objective: 'Objetivo', activities: [] }, undefined);
@@ -107,27 +120,31 @@ it('retains dirty fields across refetch and failed save without automatic retry'
   expect(title).toHaveValue('Borrador');
   vi.mocked(saveLesson).mockRejectedValue(new Error('Error de guardado'));
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByText('Error de guardado')).toBeInTheDocument();
   expect(saveLesson).toHaveBeenCalledTimes(1);
   // A failed save leaves the teacher on the step where it was pressed. Going back shows the draft
   // they typed, not the value the refetch brought from the server: the field was unmounted while the
-  // activities step was showing, so retention is checked by returning to it.
+  // later steps were showing, so retention is checked by returning to it.
+  await userEvent.click(screen.getByRole('button', { name: 'Atrás' }));
   await userEvent.click(screen.getByRole('button', { name: 'Atrás' }));
   expect(screen.getByLabelText('Título')).toHaveValue('Borrador');
 });
 it('disables saving controls and clears dirty state only after success', async () => {
   let resolve!: (value: LessonDetails) => void;
   vi.mocked(saveLesson).mockReturnValue(new Promise((done) => { resolve = done; }));
+  vi.mocked(listStudents).mockResolvedValue([bruno]);
   page();
   await userEvent.type(await screen.findByLabelText('Título'), ' editada');
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(screen.getByRole('button', { name: 'Guardando…' })).toBeDisabled();
   // While saving, the whole step goes inert — not only the button that was pressed. The metadata
   // fields cannot be checked here: they live on the first step, which is not rendered any more.
   expect(screen.getByRole('button', { name: 'Atrás' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Agregar actividad' })).toBeDisabled();
+  expect(screen.getByLabelText('Asignar estudiante')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Volver a Mis clases' })).toBeDisabled();
   resolve({ ...detail, title: 'Original editada' });
   await waitFor(() => expect(notifyLessonSaved).toHaveBeenCalledTimes(1));
@@ -224,6 +241,7 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
   // Reordering is local: it changes what will be saved and writes nothing.
   await userEvent.click(screen.getByRole('button', { name: 'Subir Conversación' }));
   expect(saveLesson).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
   expect(vi.mocked(saveLesson).mock.calls[0][0]).toEqual({
@@ -233,8 +251,10 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
       { id: null, type: 'Writing', title: 'Escritura', instructions: 'Instrucciones', estimatedDuration: 10, content: { prompt: 'Escribe' } },
     ],
   });
-  // The editor opened the saved lesson: the draft was rebuilt from the canonical response.
+  // The editor opened the saved lesson on the step where the save was pressed: the indicator walks
+  // back to the activities, whose draft was rebuilt from the canonical response.
   expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Actividades' }));
   expect(screen.getByText('Duración total:')).toHaveTextContent('15 min');
   // Editing a saved row reopens the window on its copy; the list waits for the commit again.
   await userEvent.click(screen.getByRole('button', { name: /^Conversación/ }));
@@ -242,6 +262,7 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
   await userEvent.type(screen.getByLabelText('Duración (minutos)'), '20');
   await commitActivity();
   expect(screen.getByText('Duración total:')).toHaveTextContent('30 min');
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   // The alert is the only success channel now: the second save reopens it, and the draft is clean.
   await waitFor(() => expect(notifyLessonSaved).toHaveBeenCalledTimes(2));
@@ -284,6 +305,7 @@ it('saves a complete roleplay with the exact payload and reopens it with every f
   await userEvent.type(screen.getByLabelText('Guion de conversación (opcional)'), 'Waiter: Good evening!');
   // The written script sets the mode to Con guion on its own: the picker is gone.
   await commitActivity();
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
   expect(vi.mocked(saveLesson).mock.calls[0][0].activities[0]).toEqual({
@@ -294,8 +316,10 @@ it('saves a complete roleplay with the exact payload and reopens it with every f
       objective: 'Pedir la cuenta', material: null, script: 'Waiter: Good evening!', practiceMode: 'scripted',
     },
   });
-  // Reopening the saved lesson restores the whole roleplay, not only the questions.
+  // Reopening the saved lesson restores the whole roleplay, not only the questions. The save landed
+  // on the students step, so the indicator walks back to the activities first.
   await screen.findByRole('heading', { name: 'Editar clase' });
+  await userEvent.click(screen.getByRole('button', { name: 'Actividades' }));
   await userEvent.click(screen.getByRole('button', { name: /^Roleplay en el restaurante/ }));
   expect(screen.getByLabelText('Tipo de práctica oral')).toHaveValue('roleplay');
   expect(screen.getByLabelText('Situación o contexto')).toHaveValue('Cena en un restaurante');
@@ -309,6 +333,7 @@ it('saves conversation questions from a pasted block, one per line, dropping bla
   await addActivity('Speaking', 'Conversación', 'Habla', '10');
   await userEvent.type(screen.getByLabelText('Preguntas (una por línea)'), 'Uno{enter}{enter}Dos');
   await commitActivity();
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
   expect(vi.mocked(saveLesson).mock.calls[0][0].activities[0].content)
@@ -342,10 +367,13 @@ it('keeps the activity draft and marks the activity the server rejected', async 
   await addActivity('Writing', 'Escritura', 'Instrucciones', '10');
   await userEvent.type(screen.getByLabelText('Consigna'), 'Escribe');
   await commitActivity();
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('Texto obligatorio.');
   expect(saveLesson).toHaveBeenCalledTimes(1);
-  // Nothing typed is discarded, and the failed activity stays marked in the list.
+  // The rejected save stays where it was pressed; walking back shows the draft untouched and the
+  // failed activity still marked in the list.
+  await userEvent.click(screen.getByRole('button', { name: 'Atrás' }));
   expect(screen.getByText('Duración total:')).toHaveTextContent('10 min');
   expect(screen.getByRole('button', { name: /^Escritura/ })).toHaveAccessibleDescription('Texto obligatorio.');
   // Reopening the card brings the untouched draft back into the window, message included.
@@ -377,18 +405,147 @@ it('confirms the discard only when the window really holds unsaved changes', asy
   expect(screen.queryByRole('button', { name: /Boceto/ })).not.toBeInTheDocument();
 });
 
-it('mounts the assigned-students section outside the form for an existing lesson', async () => {
+it('keeps the student assignment out of the first two steps and inside the form on the third', async () => {
+  vi.mocked(listAssignedStudents).mockResolvedValue([ana]);
   page('/lessons/l1/edit');
   await screen.findByLabelText('Título');
-  const section = await screen.findByTestId('assigned-students');
-  // Outside the <form>: neither the section nor its contents can ever be submitted with the draft.
-  expect(section.closest('form')).toBeNull();
-  expect(screen.getByRole('heading', { name: 'Estudiantes asignados' }).closest('form')).toBeNull();
+  expect(screen.queryByTestId('students-step')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  expect(screen.queryByTestId('students-step')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  const section = await screen.findByTestId('students-step');
+  // Inside the <form>: the selection is part of the draft and only reaches the server with the save.
+  expect(section.closest('form')).not.toBeNull();
+  expect(screen.getByRole('link', { name: 'Ana' })).toBeInTheDocument();
 });
 
-it('does not mount the assigned-students section for a lesson that has no Id yet', async () => {
-  // A brand-new lesson has nothing to assign a student to, so the section is absent.
-  page('/lessons/new');
+it('saves without touching the assignment endpoints while the selection stays untouched', async () => {
+  vi.mocked(listAssignedStudents).mockResolvedValue([ana, carla]);
+  vi.mocked(saveLesson).mockResolvedValue(detail);
+  page('/lessons/l1/edit');
   await screen.findByLabelText('Título');
-  expect(screen.queryByTestId('assigned-students')).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  await screen.findByTestId('students-step');
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
+  // Not changing the assignments and clearing them on purpose are different operations: an
+  // untouched selection must never reach the assignment endpoints.
+  expect(assignStudentToLesson).not.toHaveBeenCalled();
+  expect(unassignStudentFromLesson).not.toHaveBeenCalled();
+});
+
+it('stages an assignment without writing, then applies it after the lesson save', async () => {
+  vi.mocked(listAssignedStudents).mockResolvedValue([ana]);
+  vi.mocked(listStudents).mockResolvedValue([bruno]);
+  vi.mocked(saveLesson).mockResolvedValue(detail);
+  vi.mocked(assignStudentToLesson).mockResolvedValue(brunoAssigned);
+  page('/lessons/l1/edit');
+  await screen.findByLabelText('Título');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  await userEvent.selectOptions(screen.getByLabelText('Asignar estudiante'), 's2');
+  // Staging only moves the local selection: nothing was written and the candidate left the picker.
+  expect(saveLesson).not.toHaveBeenCalled();
+  expect(screen.getByRole('link', { name: 'Bruno' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: 'Bruno · B1' })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(assignStudentToLesson).toHaveBeenCalledWith('l1', 's2'));
+  expect(unassignStudentFromLesson).not.toHaveBeenCalled();
+});
+
+it('keeps removals as intent until the save, which then unassigns every removed pair', async () => {
+  vi.mocked(listAssignedStudents).mockResolvedValue([ana, carla]);
+  vi.mocked(saveLesson).mockResolvedValue(detail);
+  page('/lessons/l1/edit');
+  await screen.findByLabelText('Título');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Quitar a Ana' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Quitar a Carla' }));
+  // The emptied selection is not on the server yet: removing everything is only staged.
+  expect(unassignStudentFromLesson).not.toHaveBeenCalled();
+  expect(screen.getByTestId('students-empty')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  await waitFor(() => expect(unassignStudentFromLesson).toHaveBeenCalledWith('l1', 's1'));
+  await waitFor(() => expect(unassignStudentFromLesson).toHaveBeenCalledWith('l1', 's3'));
+  expect(assignStudentToLesson).not.toHaveBeenCalled();
+});
+
+it('keeps the staged selection across step navigation and saves it at the end', async () => {
+  vi.mocked(listStudents).mockResolvedValue([bruno]);
+  vi.mocked(saveLesson).mockResolvedValue(detail);
+  vi.mocked(assignStudentToLesson).mockResolvedValue(brunoAssigned);
+  page('/lessons/l1/edit');
+  await screen.findByLabelText('Título');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  await userEvent.selectOptions(screen.getByLabelText('Asignar estudiante'), 's2');
+  // Walking back and forth never drops the staged pair, and it never writes on the way.
+  await userEvent.click(screen.getByRole('button', { name: 'Atrás' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Atrás' }));
+  expect(screen.getByLabelText('Título')).toHaveValue('Original');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  expect(screen.getByRole('link', { name: 'Bruno' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  await waitFor(() => expect(assignStudentToLesson).toHaveBeenCalledWith('l1', 's2'));
+});
+
+it('creates the lesson and assigns the staged students to its new id', async () => {
+  vi.mocked(saveLesson).mockResolvedValue(detail);
+  vi.mocked(listStudents).mockResolvedValue([bruno]);
+  vi.mocked(assignStudentToLesson).mockResolvedValue(brunoAssigned);
+  page('/lessons/new');
+  await userEvent.type(screen.getByLabelText('Título'), 'Nueva');
+  await userEvent.type(screen.getByLabelText('Objetivo'), 'Objetivo');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  await userEvent.selectOptions(screen.getByLabelText('Asignar estudiante'), 's2');
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  // The assignment rides on the freshly created lesson: POST first, pair against its returned id.
+  await waitFor(() => expect(assignStudentToLesson).toHaveBeenCalledWith('l1', 's2'));
+  expect(saveLesson).toHaveBeenCalledTimes(1);
+  expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
+});
+
+it('warns about the assignments that failed without saving the lesson twice', async () => {
+  vi.mocked(saveLesson).mockResolvedValue(detail);
+  vi.mocked(listStudents).mockResolvedValue([bruno]);
+  vi.mocked(assignStudentToLesson).mockRejectedValue(new Error('conflicto'));
+  page('/lessons/new');
+  await userEvent.type(screen.getByLabelText('Título'), 'Nueva');
+  await userEvent.type(screen.getByLabelText('Objetivo'), 'Objetivo');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  await userEvent.selectOptions(screen.getByLabelText('Asignar estudiante'), 's2');
+  await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
+  // The lesson is already saved, so a failed pair warns instead of retrying the whole save.
+  await waitFor(() => expect(notifyLessonSavedWithIssues).toHaveBeenCalledWith(['Bruno']));
+  expect(notifyLessonSaved).not.toHaveBeenCalled();
+  expect(saveLesson).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a trashed assigned student in the selection without a removal action', async () => {
+  vi.mocked(listAssignedStudents).mockResolvedValue([{ ...ana, inTrash: true }]);
+  page('/lessons/l1/edit');
+  await screen.findByLabelText('Título');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  expect(await screen.findByTestId('trash-mark')).toHaveTextContent('En papelera');
+  // Without the removal control the staged diff can never offer a trashed pair for deletion.
+  expect(screen.queryByRole('button', { name: 'Quitar a Ana' })).not.toBeInTheDocument();
+});
+
+it('shows the third step for a new lesson with an empty selection and no assignment reads', async () => {
+  page('/lessons/new');
+  await userEvent.type(screen.getByLabelText('Título'), 'Nueva');
+  await userEvent.type(screen.getByLabelText('Objetivo'), 'Objetivo');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
+  expect(await screen.findByTestId('students-step')).toBeInTheDocument();
+  // A brand-new lesson has no assignments to read from the server.
+  expect(listAssignedStudents).not.toHaveBeenCalled();
+  expect(screen.getByTestId('students-empty')).toBeInTheDocument();
 });

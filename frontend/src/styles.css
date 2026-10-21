@@ -111,8 +111,8 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid var(-
 .editor-actions > button { flex: 1 1 160px; }
 .editor-step-hint { max-width: 46ch; }
 /* Higher specificity than `.lesson-editor fieldset`, which resets border and padding. */
-.lesson-editor fieldset.activity-section { display: block; }
-.activity-section legend { font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
+.lesson-editor fieldset.activity-section, .lesson-editor fieldset.students-step-section { display: block; }
+.activity-section legend, .students-step-section legend { font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
 .activity-total { font-weight: 600; color: var(--pf-muted); margin: 12px 0 18px; }
 .activity-add { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
 .activity-add > div { flex: 1 1 200px; }
