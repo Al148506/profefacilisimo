@@ -111,8 +111,8 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid var(-
 .editor-actions > button { flex: 1 1 160px; }
 .editor-step-hint { max-width: 46ch; }
 /* Higher specificity than `.lesson-editor fieldset`, which resets border and padding. */
-.lesson-editor fieldset.activity-section { display: block; }
-.activity-section legend { font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
+.lesson-editor fieldset.activity-section, .lesson-editor fieldset.students-step-section { display: block; }
+.activity-section legend, .students-step-section legend { font-family: system-ui, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; padding: 0 6px 0 0; }
 .activity-total { font-weight: 600; color: var(--pf-muted); margin: 12px 0 18px; }
 .activity-add { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 20px; }
 .activity-add > div { flex: 1 1 200px; }
@@ -144,6 +144,10 @@ textarea { font: inherit; width: 100%; resize: vertical; border: 1px solid var(-
 .activity-row > button { align-self: flex-end; }
 .activity-row-actions { display: flex; gap: 8px; justify-content: flex-end; align-self: flex-end; }
 .activity-rows > button { align-self: flex-start; }
+.activity-rows-add { display: flex; gap: 8px; align-self: flex-start; }
+/* Bulk panel: paste a whole list once, one item per line, and it lands as ordinary rows. */
+.activity-bulk { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; border: 1px solid #e6ebdd; border-radius: 8px; padding: 12px; }
+.activity-bulk > button { align-self: flex-start; }
 /* Compact role rows: name and description share one grid line, and the remove action is a bare
    icon, so even six roles read as six short rows instead of six stacked blocks. */
 .activity-role { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 0 10px; align-items: start; border-bottom: 1px solid #eef1e8; padding-bottom: 10px; margin-bottom: 10px; }

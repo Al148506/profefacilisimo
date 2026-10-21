@@ -11,8 +11,11 @@
 4. **Título de la actividad**, **Instrucciones** y **Duración (minutos)** existen en los cuatro
    tipos. El resto de campos depende del tipo:
    - Speaking: depende del **tipo de práctica oral** (SPEC 09) —
-     - **Conversation** (por defecto, y lo que eran todas las Speaking anteriores): lista de
-       preguntas que se puede añadir, quitar y reordenar con Subir / Bajar.
+      - **Conversation** (por defecto, y lo que eran todas las Speaking anteriores): bloque de texto
+        con una pregunta por línea, pegable de una vez. Las líneas vacías se descartan y los espacios
+        se recortan al guardar; se reordena moviendo las líneas. El wire sigue siendo
+        `questionsList` (1 a 50 preguntas de hasta 2000 caracteres), así que el jugador y el dominio
+        no cambian.
      - **Roleplay**: situación o contexto (obligatorio), roles de los participantes con nombre y
        descripción opcional (2 como mínimo, 6 como máximo), objetivo comunicativo y material de
        apoyo opcionales, guion de conversación como texto continuo (opcional) y modo de práctica
@@ -24,9 +27,11 @@
    - Reading: texto de lectura y lista de preguntas.
    - Writing: consigna.
    - Vocabulario y gramática: explicación y lista de ejercicios.
-5. Añade y quita filas con **Añadir pregunta** / **Añadir ejercicio** / **Añadir punto** /
-   **Añadir rol** y **Quitar**. En preguntas y ejercicios siempre queda al menos una fila; en los
-   puntos de apoyo la lista puede quedar vacía; en los roles se conservan al menos dos.
+ 5. Añade y quita filas con **Añadir pregunta** / **Añadir ejercicio** / **Añadir punto** /
+    **Añadir rol** y **Quitar**. En preguntas y ejercicios siempre queda al menos una fila; en los
+    puntos de apoyo la lista puede quedar vacía; en los roles se conservan al menos dos. Con
+    **Añadir en bloque** se pegan varias filas de golpe (una por línea) en Reading, Vocabulario y
+    gramática y en los puntos de una Presentation.
 6. Cambia el tipo con el selector **Tipo**. Si hay contenido específico que descartar, se pide
    confirmación; cancelar deja intacto el tipo y todos los campos, y confirmar conserva Id, título,
    instrucciones y duración y vacía solo el contenido específico.
@@ -86,6 +91,12 @@
   reglas aplicables, las filas anteriores a SPEC 09 se leen como `conversation` y no hay ninguna
   migración. `LessonService` y los DTOs siguen tratando el contenido como un `JsonElement` opaco;
   la autoridad es `SpeakingContent.Validate()` en el dominio.
+- **La Conversation del borrador es texto continuo; el contrato sigue siendo la lista.** El draft
+  guarda `questionsText`, `speakingFromSaved` une con saltos de línea las preguntas almacenadas y
+  `speakingInput` las separa con `splitLines` al validar y enviar: el JSON viaja exactamente igual
+  (1 a 50 preguntas de hasta 2000 caracteres, recortadas) y ni el dominio ni el jugador cambian.
+  Siguiendo el precedente del guion de Roleplay en SPEC 09, no se fuerza una fila por pregunta:
+  pegar una lista completa es el camino normal, y reordenar es mover líneas.
 - **`ActivityList` es totalmente controlado.** No guarda copia de las actividades, por lo que
   cambiar de selección no puede perder los valores locales de las demás.
 

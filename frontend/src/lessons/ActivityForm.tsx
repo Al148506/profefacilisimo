@@ -1,9 +1,9 @@
-import { ChevronDown, ChevronRight, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowDown, ArrowUp, ListPlus, Plus, Trash2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Button } from '../components/Button';
 import {
   ACTIVITY_TYPES, ACTIVITY_TYPE_LABELS,
-  SPEAKING_SUBTYPES, SPEAKING_SUBTYPE_LABELS, applySubtype, applyType, hasSpecificContent,
+  SPEAKING_SUBTYPES, SPEAKING_SUBTYPE_LABELS, applySubtype, applyType, hasSpecificContent, splitLines,
   type ActivityDraft, type ActivityType,
   type SpeakingContent, type SpeakingSubtype, type SpeakingRole,
 } from './lesson-schema';
@@ -33,6 +33,8 @@ type RowsProps = {
   minRows?: number;
   maxRows?: number;
   maxLength?: number;
+  /** Sample shown inside the bulk textarea while it is empty. */
+  bulkPlaceholder?: string;
 };
 
 function swap(values: string[], from: number, to: number): string[] {
@@ -42,8 +44,20 @@ function swap(values: string[], from: number, to: number): string[] {
 }
 
 /** A list of questions, exercises or points. Rows are added, removed and reordered locally, never saved on the spot. */
-function Rows({ id, path, legend, itemLabel, addLabel, values, errors, onChange, minRows = 1, maxRows = MAX_ROWS, maxLength = MAX_ROW_LENGTH }: RowsProps) {
+function Rows({ id, path, legend, itemLabel, addLabel, values, errors, onChange, minRows = 1, maxRows = MAX_ROWS, maxLength = MAX_ROW_LENGTH, bulkPlaceholder }: RowsProps) {
   const listError = errors[path];
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const bulkItems = splitLines(bulkText);
+  const plural = addLabel + 's';
+  const room = Math.max(maxRows - values.length, 0);
+  const pending = Math.min(bulkItems.length, room);
+  function addBulk() {
+    // Everything is still local: the bulk text only feeds the same row list the teacher can reorder.
+    onChange([...values, ...bulkItems].slice(0, maxRows));
+    setBulkText('');
+    setBulkOpen(false);
+  }
   return <div className="activity-rows">
     <p className="activity-rows-legend">{legend}</p>
     {values.map((value, index) => {
@@ -70,8 +84,23 @@ function Rows({ id, path, legend, itemLabel, addLabel, values, errors, onChange,
       </div>;
     })}
     {listError && <small className="error">{listError}</small>}
-    <Button variant="secondary" type="button" icon={Plus} disabled={values.length >= maxRows}
-      onClick={() => onChange([...values, ''])}>Añadir {addLabel}</Button>
+    <span className="activity-rows-add">
+      <Button variant="secondary" type="button" icon={Plus} disabled={values.length >= maxRows}
+        onClick={() => onChange([...values, ''])}>Añadir {addLabel}</Button>
+      <Button variant="secondary" type="button" icon={ListPlus} aria-expanded={bulkOpen} disabled={room === 0}
+        onClick={() => setBulkOpen(!bulkOpen)}>Añadir en bloque</Button>
+    </span>
+    {bulkOpen && <div className="activity-bulk">
+      <label htmlFor={id + '-bulk'}>{plural + ' (una por línea)'}</label>
+      <textarea id={id + '-bulk'} rows={5} value={bulkText} placeholder={bulkPlaceholder}
+        onChange={(event) => setBulkText(event.target.value)} />
+      {pending > 0 && <small className="hint">
+        {pending + ' ' + plural + ' para añadir'
+          + (bulkItems.length > room ? ' (solo caben ' + pending + '; el máximo es ' + maxRows + ' ' + plural + ')' : '') + '.'}
+      </small>}
+      <Button variant="secondary" type="button" icon={Plus} disabled={pending === 0}
+        onClick={addBulk}>Añadir {pending} {plural}</Button>
+    </div>}
   </div>;
 }
 
@@ -209,6 +238,7 @@ function RoleplayFields({ activity, roleplay, errors, onChange }: {
 function SpeakingFields({ activity, errors, onChange }: { activity: ActivityDraft & { type: 'Speaking' }; errors: ActivityFieldErrors; onChange: (next: ActivityDraft) => void }) {
   const id = activity.key;
   const { content } = activity;
+  const questionsMessage = errors['content.questionsText'];
   function changeSubtype(next: SpeakingSubtype): boolean {
     if (next === content.subtype) return true;
     // The warning appears only when there is meaningful content at stake, never over initial blanks.
@@ -229,10 +259,15 @@ function SpeakingFields({ activity, errors, onChange }: { activity: ActivityDraf
         {SPEAKING_SUBTYPES.map((subtype) => <option key={subtype} value={subtype}>{SPEAKING_SUBTYPE_LABELS[subtype]}</option>)}
       </select>
     </div>
-    {content.subtype === 'conversation' &&
-      <Rows id={id + '-question'} path="content.questionsList" legend="Preguntas" itemLabel="Pregunta" addLabel="pregunta"
-        values={content.questionsList} errors={errors}
-        onChange={(questionsList) => onChange({ ...activity, content: { subtype: 'conversation', questionsList } })} />}
+    {content.subtype === 'conversation' && <div className="activity-field">
+      <label htmlFor={id + '-questions'}>Preguntas (una por línea)</label>
+      <textarea id={id + '-questions'} rows={8} value={content.questionsText}
+        placeholder={'¿Cómo te llamas?\n¿De dónde eres?'}
+        aria-invalid={!!questionsMessage} aria-describedby={questionsMessage ? id + '-questions-error' : undefined}
+        onChange={(event) => onChange({ ...activity, content: { ...content, questionsText: event.target.value } })} />
+      <small className="hint">Escribe o pega la lista completa: cada línea es una pregunta; se reordenan moviendo las líneas.</small>
+      <small className="error" id={id + '-questions-error'}>{questionsMessage}</small>
+    </div>}
     {content.subtype === 'roleplay' && <RoleplayFields activity={activity} roleplay={content} errors={errors} onChange={onChange} />}
     {content.subtype === 'presentation' && <>
       <TextField id={id + '-context'} label="Tema" path="content.context" maxLength={2000}
@@ -261,6 +296,7 @@ function ContentFields({ activity, errors, onChange }: ActivityFormProps) {
       </div>
       <Rows id={id + '-question'} path="content.questionsList" legend="Preguntas" itemLabel="Pregunta" addLabel="pregunta"
         values={current.content.questionsList} errors={errors}
+        bulkPlaceholder={'¿Qué dice el texto?\n¿Cuál es la idea principal?'}
         onChange={(questionsList) => onChange({ ...current, content: { ...current.content, questionsList } })} />
     </>;
   }

@@ -63,20 +63,27 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   await page.getByLabel('Tema', { exact: true }).fill('Viajes');
   await page.getByLabel('Objetivo', { exact: true }).fill('Hablar del pasado');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
   // The success alert stays open until it is dismissed, and while it is open SweetAlert2 marks every
   // other child of <body> as `aria-hidden`, which hides the whole editor from role queries. So the
   // alert is closed before anything underneath it is asserted on.
   await page.getByRole('button', { name: 'Aceptar' }).click();
-  await expect(page.getByRole('heading', { name: 'Editar clase' })).toBeVisible();
-  // Creating lands on the activities step, so the metadata is read after going back to the first one.
-  await page.getByRole('button', { name: 'Atrás', exact: true }).click();
+  // A confirmed save returns to the lesson list the moment its alert is dismissed, and the class
+  // is waiting there with its trimmed title.
+  await expect(page.getByRole('heading', { name: 'Mis clases' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Clase nueva' })).toBeVisible();
+  await page.getByRole('link', { name: 'Editar Clase nueva', exact: true }).click();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Clase nueva');
   await page.getByLabel('Título', { exact: true }).fill('Clase editada');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
   await expect(page.getByText('Clase guardada correctamente')).toBeVisible();
   await page.getByRole('button', { name: 'Aceptar' }).click();
+  // The second save lands back on the list too: reopening and reloading proves the persisted values.
+  await expect(page.getByRole('heading', { name: 'Clase editada', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Editar Clase editada', exact: true }).click();
   await page.reload();
   await expect(page.getByLabel('Título', { exact: true })).toHaveValue('Clase editada');
   await expect(page.getByLabel('Nivel', { exact: true })).toHaveValue('B2');
@@ -112,10 +119,11 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   await expect(page.getByLabel('Objetivo', { exact: true })).toHaveValue('Hablar del pasado');
   await page.getByLabel('Título', { exact: true }).fill('Copia independiente');
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
   await expect(page.getByText('Clase guardada correctamente')).toBeVisible();
   await page.getByRole('button', { name: 'Aceptar' }).click();
-  await page.getByRole('button', { name: 'Volver a Mis clases' }).click();
+  // The dismissed alert has already brought the list back, and both lessons are there.
   await expect(page.getByRole('heading', { name: 'Clase editada', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Copia independiente', exact: true })).toBeVisible();
   page.once('dialog', (dialog) => dialog.dismiss());

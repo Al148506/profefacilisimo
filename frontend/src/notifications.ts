@@ -33,6 +33,19 @@ export function notifyLessonSaved(): Promise<unknown> {
   });
 }
 
+/**
+ * The class itself was saved, but some student assignments were refused. It is a warning, not an
+ * error: the draft is already clean, and the names tell the teacher exactly what to stage again.
+ */
+export function notifyLessonSavedWithIssues(names: readonly string[]): Promise<unknown> {
+  return themed({
+    icon: 'warning',
+    title: 'Clase guardada con avisos',
+    text: 'No pudimos asignar a ' + names.join(', ') + '. Puedes volver a intentarlo desde la asignación de estudiantes.',
+    confirmButtonText: 'Aceptar',
+  });
+}
+
 /** The student was created or updated and the server confirmed it. */
 export function notifyStudentSaved(): Promise<unknown> {
   return themed({

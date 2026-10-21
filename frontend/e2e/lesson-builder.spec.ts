@@ -24,13 +24,21 @@ test('builds the activity set, saves it as a whole and reproduces it after reloa
   expect(created.status()).toBe(201);
   const lesson = await created.json();
   const stored = async () => (await page.request.get('/api/lessons/' + lesson.id, { headers: auth })).json();
+  // «Guardar clase» lives on the third step of the wizard. A clean save returns to the listing when
+  // the alert is dismissed, so the helper walks there, saves, and reopens the lesson on the activities
+  // step, which is where the rest of this scenario keeps working on the cards.
   const save = async () => {
     const answered = page.waitForResponse((response) =>
       response.url().includes('/api/lessons/' + lesson.id) && response.request().method() === 'PUT');
+    await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
     await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
     expect((await answered).status()).toBe(200);
     // The success alert stays open until it is dismissed, and it would otherwise cover the editor.
     await page.getByRole('button', { name: 'Aceptar' }).click();
+    await expect(page.getByRole('heading', { name: 'Mis clases' })).toBeVisible();
+    await page.getByRole('link', { name: 'Editar ' + lesson.title, exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Editar clase' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   };
 
   await page.goto('/lessons/' + lesson.id + '/edit');
@@ -59,7 +67,8 @@ test('builds the activity set, saves it as a whole and reproduces it after reloa
   await page.getByLabel('Ejercicio 1', { exact: true }).fill('Ayer (ir) ___ al cine.');
   await expect(page.getByText('Duración incompleta')).toBeVisible();
 
-  // Guardar con una duración pendiente no envía nada y marca la actividad en la lista.
+  // Guardar con una duración pendiente no envía nada, devuelve a la lista y marca la actividad.
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
   await expect(page.getByText('Indica la duración en minutos.').first()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Pretérito indefinido/ })).toHaveAccessibleDescription('Indica la duración en minutos.');

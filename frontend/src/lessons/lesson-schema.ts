@@ -47,7 +47,8 @@ export const PRACTICE_MODE_HINTS: Record<PracticeMode, string> = {
 };
 
 export type SpeakingRole = { name: string; description: string };
-export type ConversationContent = { subtype: 'conversation'; questionsList: string[] };
+/** Conversation questions live in one editable block: one question per line, split only on save. */
+export type ConversationContent = { subtype: 'conversation'; questionsText: string };
 export type RoleplayContent = {
   subtype: 'roleplay'; context: string; roles: SpeakingRole[]; objective: string;
   material: string; script: string; practiceMode: PracticeMode;
@@ -109,10 +110,27 @@ const duration = z.number({ error: 'Indica la duración en minutos.' })
   .int('Usa minutos enteros, sin decimales.')
   .positive('La duración debe ser mayor que cero.');
 
+/** One question per line: blank lines disappear, and every line is trimmed. */
+export function splitLines(text: string): string[] {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== '');
+}
+
 // Optional text: blank is accepted here and normalized to null on the wire, like Rules.Optional in the domain.
 const optionalText = (max: number) => z.string().trim().max(max, 'Máximo ' + max + ' caracteres.');
 
-const conversationContent = z.object({ subtype: z.literal('conversation'), questionsList });
+/** The draft holds the whole block; the same 1–50 × 2000 rules are validated over its split lines. */
+const conversationContent = z.object({ subtype: z.literal('conversation'), questionsText: z.string() })
+  .superRefine((content, ctx) => {
+    const questions = splitLines(content.questionsText);
+    if (questions.length === 0) ctx.addIssue({ code: 'custom', path: ['questionsText'], message: 'Añade al menos una pregunta.' });
+    if (questions.length > 50) ctx.addIssue({ code: 'custom', path: ['questionsText'], message: 'Máximo 50 preguntas.' });
+    questions.forEach((questionText, index) => {
+      if (questionText.length > 2000) ctx.addIssue({
+        code: 'custom', path: ['questionsText'],
+        message: 'Máximo 2000 caracteres por pregunta (línea ' + (index + 1) + ').',
+      });
+    });
+  });
 
 const roleplayContent = z.object({
   subtype: z.literal('roleplay'),
@@ -178,7 +196,7 @@ export function applyType(base: ActivityDraftBase, type: ActivityType): Activity
 /** The starting content of a subtype: blank fields the teacher fills in, never invented content. */
 export function initialSpeakingContent(subtype: SpeakingSubtype): SpeakingContent {
   switch (subtype) {
-    case 'conversation': return { subtype, questionsList: [''] };
+    case 'conversation': return { subtype, questionsText: '' };
     case 'roleplay': return {
       // Guided is the mode of a roleplay without a script, which is exactly what a blank one is.
       subtype, context: '', objective: '', material: '', script: '', practiceMode: 'guided',
@@ -218,7 +236,7 @@ export function hasSpecificContent(activity: ActivityDraft): boolean {
  */
 function hasSpeakingContent(content: SpeakingContent): boolean {
   switch (content.subtype) {
-    case 'conversation': return content.questionsList.some(filled);
+    case 'conversation': return content.questionsText.trim() !== '';
     case 'roleplay':
       return content.context.trim() !== '' || content.objective.trim() !== ''
         || content.material.trim() !== '' || content.script.trim() !== ''
@@ -271,8 +289,14 @@ function speakingFromSaved(content: Record<string, unknown>): SpeakingContent {
       context: line(content.context),
       talkingPoints: textItems(content.talkingPoints),
     };
-    default: return { subtype: 'conversation', questionsList: rows(content.questionsList) };
+    default: return { subtype: 'conversation', questionsText: savedQuestionsText(content.questionsList) };
   }
+}
+
+/** Stored rows reopen as one editable block: each question keeps its own line. */
+function savedQuestionsText(value: unknown): string {
+  if (!Array.isArray(value)) return '';
+  return value.map((item) => (typeof item === 'string' ? item : '')).join('\n');
 }
 
 function isPracticeMode(value: unknown): value is PracticeMode {
@@ -319,7 +343,7 @@ export function toActivityInput(activity: ValidatedActivityDraft): LessonActivit
 /** Only the current subtype's fields go on the wire; blank optionals go as null, like the domain. */
 function speakingInput(content: SpeakingContent): SpeakingContentInput {
   switch (content.subtype) {
-    case 'conversation': return { subtype: 'conversation', questionsList: content.questionsList };
+    case 'conversation': return { subtype: 'conversation', questionsList: splitLines(content.questionsText) };
     case 'roleplay': return {
       subtype: 'roleplay', context: content.context,
       roles: content.roles.map((role) => ({ name: role.name, description: blankToNull(role.description) })),
