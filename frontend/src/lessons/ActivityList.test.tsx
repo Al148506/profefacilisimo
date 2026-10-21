@@ -6,7 +6,7 @@ import ActivityList from './ActivityList';
 import type { ActivityDraft } from './lesson-schema';
 
 const speaking = (key: string, title: string, duration: number | null): ActivityDraft =>
-  ({ key, id: null, type: 'Speaking', title, instructions: 'Instrucciones', duration, content: { subtype: 'conversation', questionsList: ['Pregunta'] } });
+  ({ key, id: null, type: 'Speaking', title, instructions: 'Instrucciones', duration, content: { subtype: 'conversation', questionsText: 'Pregunta' } });
 const reading = (key: string, title: string, duration: number | null): ActivityDraft =>
   ({ key, id: null, type: 'Reading', title, instructions: 'Instrucciones', duration, content: { text: 'Texto', questionsList: ['Pregunta'] } });
 const writing = (key: string, title: string, duration: number | null): ActivityDraft =>

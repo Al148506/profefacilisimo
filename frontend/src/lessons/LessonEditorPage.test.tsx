@@ -76,7 +76,7 @@ it('creates lesson successfully without topic', async () => {
 it('validates the content of each activity type and keeps the exact field path', () => {
   const draft = { key: 'activity-1', id: null, title: 'Actividad', instructions: 'Instrucciones', duration: 10 };
   const parse = (activity: unknown) => lessonDraftSchema.safeParse({ ...detail, activities: [activity] });
-  expect(parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsList: ['¿Qué tal?'] } }).success).toBe(true);
+  expect(parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsText: '¿Qué tal?' } }).success).toBe(true);
   expect(parse({ ...draft, type: 'Reading', content: { text: 'Texto', questionsList: ['Pregunta'] } }).success).toBe(true);
   expect(parse({ ...draft, type: 'Writing', content: { prompt: 'Consigna' } }).success).toBe(true);
   expect(parse({ ...draft, type: 'VocabularyGrammar', content: { explanation: 'Explicación', exercises: ['Ejercicio'] } }).success).toBe(true);
@@ -88,12 +88,12 @@ it('validates the content of each activity type and keeps the exact field path',
   const wrong = parse({ ...draft, type: 'Reading', content: { prompt: 'Consigna' } });
   expect(wrong.success).toBe(false);
   expect(wrong.error?.issues[0].path.join('.')).toBe('activities.0.content.text');
-  const empty = parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsList: [''] } });
+  const empty = parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsText: '  \n ' } });
   expect(empty.success).toBe(false);
-  expect(empty.error?.issues[0].path.join('.')).toBe('activities.0.content.questionsList.0');
-  expect(parse({ ...draft, type: 'Speaking', content: { questionsList: ['x'] } }).success).toBe(false);
-  expect(parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsList: Array(51).fill('x') } }).success).toBe(false);
-  expect(parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsList: [] } }).success).toBe(false);
+  expect(empty.error?.issues[0].path.join('.')).toBe('activities.0.content.questionsText');
+  expect(parse({ ...draft, type: 'Speaking', content: { questionsText: 'x' } }).success).toBe(false);
+  expect(parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsText: Array.from({ length: 51 }, (_, i) => 'x' + i).join('\n') } }).success).toBe(false);
+  expect(parse({ ...draft, type: 'Speaking', content: { subtype: 'conversation', questionsText: 'P\n' + 'x'.repeat(2001) } }).success).toBe(false);
   expect(parse({ ...draft, type: 'Reading', content: { text: 'x'.repeat(20001), questionsList: ['y'] } }).success).toBe(false);
   expect(parse({ ...draft, type: 'Writing', content: { prompt: 'x'.repeat(5001) } }).success).toBe(false);
   expect(parse({ ...draft, type: 'VocabularyGrammar', content: { explanation: 'x'.repeat(10001), exercises: ['y'] } }).success).toBe(false);
@@ -216,7 +216,7 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   expect(screen.getByText('Indica la duración en minutos.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /^Conversación/ })).not.toBeInTheDocument();
-  await userEvent.type(screen.getByLabelText('Pregunta 1'), '¿Qué tal?');
+  await userEvent.type(screen.getByLabelText('Preguntas (una por línea)'), '¿Qué tal?');
   await userEvent.type(screen.getByLabelText('Duración (minutos)'), '5');
   expect(screen.queryByText('Indica la duración en minutos.')).not.toBeInTheDocument();
   await commitActivity();
@@ -303,19 +303,16 @@ it('saves a complete roleplay with the exact payload and reopens it with every f
   expect(screen.getByLabelText('Guion de conversación (opcional)')).toHaveValue('Waiter: Good evening!');
 });
 
-it('reorders conversation questions through the draft and the saved payload keeps the new order', async () => {
+it('saves conversation questions from a pasted block, one per line, dropping blank lines', async () => {
   page('/lessons/new');
   await metadata();
   await addActivity('Speaking', 'Conversación', 'Habla', '10');
-  await userEvent.type(screen.getByLabelText('Pregunta 1'), 'Uno');
-  await userEvent.click(screen.getByRole('button', { name: 'Añadir pregunta' }));
-  await userEvent.type(screen.getByLabelText('Pregunta 2'), 'Dos');
-  await userEvent.click(screen.getByRole('button', { name: 'Bajar pregunta 1' }));
+  await userEvent.type(screen.getByLabelText('Preguntas (una por línea)'), 'Uno{enter}{enter}Dos');
   await commitActivity();
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
   await waitFor(() => expect(saveLesson).toHaveBeenCalledTimes(1));
   expect(vi.mocked(saveLesson).mock.calls[0][0].activities[0].content)
-    .toEqual({ subtype: 'conversation', questionsList: ['Dos', 'Uno'] });
+    .toEqual({ subtype: 'conversation', questionsList: ['Uno', 'Dos'] });
 });
 
 it('keeps an invalid activity inside the window and marks the exact field', async () => {

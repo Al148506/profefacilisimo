@@ -17,9 +17,9 @@ function saved(content: unknown, type: LessonActivityDto['type'] = 'Speaking'): 
 }
 
 describe('applyType and subtypes', () => {
-  it('opens a Speaking activity as Conversation with one empty question, like before SPEC 09', () => {
+  it('opens a Speaking activity as Conversation with one empty questions block', () => {
     const draft = applyType({ key: 'k', id: null, title: '', instructions: '', duration: null }, 'Speaking');
-    expect(draft.content).toEqual({ subtype: 'conversation', questionsList: [''] });
+    expect(draft.content).toEqual({ subtype: 'conversation', questionsText: '' });
   });
 
   it('starts each subtype with blank values that never count as content', () => {
@@ -30,7 +30,7 @@ describe('applyType and subtypes', () => {
   });
 
   it('applySubtype replaces only the Speaking content and keeps the shared fields', () => {
-    const activity = speakingDraft({ subtype: 'conversation', questionsList: ['¿Qué tal?'] });
+    const activity = speakingDraft({ subtype: 'conversation', questionsText: '¿Qué tal?' });
     const next = applySubtype(activity, 'presentation');
     expect(next.type === 'Speaking' && next.content).toEqual({ subtype: 'presentation', context: '', talkingPoints: [] });
     expect(next).toMatchObject({ key: 'a1', title: 'Actividad', instructions: 'Instrucciones', duration: 10 });
@@ -45,11 +45,17 @@ describe('lessonDraftSchema with subtypes', () => {
     });
   }
 
-  it('keeps the current conversation rules', () => {
-    expect(validate({ subtype: 'conversation', questionsList: ['P'] }).success).toBe(true);
-    expect(validate({ subtype: 'conversation', questionsList: [] }).success).toBe(false);
-    expect(validate({ subtype: 'conversation', questionsList: [''] }).success).toBe(false);
-    expect(validate({ subtype: 'conversation', questionsList: Array.from({ length: 51 }, (_, i) => 'P' + i) }).success).toBe(false);
+  it('keeps the current conversation rules over the lines of the block', () => {
+    expect(validate({ subtype: 'conversation', questionsText: 'P' }).success).toBe(true);
+    expect(validate({ subtype: 'conversation', questionsText: ' P \n\nQ\n' }).success).toBe(true);
+    expect(validate({ subtype: 'conversation', questionsText: '  \n\n ' }).success).toBe(false);
+    expect(validate({ subtype: 'conversation', questionsText: Array.from({ length: 51 }, (_, i) => 'P' + i).join('\n') }).success).toBe(false);
+    const tooLong = validate({ subtype: 'conversation', questionsText: 'P\n' + 'x'.repeat(2001) });
+    expect(tooLong.success).toBe(false);
+    if (!tooLong.success) {
+      const issue = tooLong.error.issues.find((x) => x.path.join('.') === 'activities.0.content.questionsText');
+      expect(issue?.message).toBe('Máximo 2000 caracteres por pregunta (línea 2).');
+    }
   });
 
   it('accepts a complete roleplay and rejects the known mistakes', () => {
@@ -92,9 +98,9 @@ describe('lessonDraftSchema with subtypes', () => {
 });
 
 describe('draftFromSaved', () => {
-  it('reads a legacy row without subtype as conversation', () => {
+  it('reads a legacy row without subtype as conversation, one question per line', () => {
     const draft = draftFromSaved(saved({ questionsList: ['¿Qué tal?'] }));
-    expect(draft.type === 'Speaking' && draft.content).toEqual({ subtype: 'conversation', questionsList: ['¿Qué tal?'] });
+    expect(draft.type === 'Speaking' && draft.content).toEqual({ subtype: 'conversation', questionsText: '¿Qué tal?' });
   });
 
   it('reads a stored roleplay with every field', () => {
@@ -151,9 +157,11 @@ describe('toActivityInput', () => {
     });
   });
 
-  it('keeps the conversation payload exactly as before', () => {
-    const draft = speakingDraft({ subtype: 'conversation', questionsList: ['P'] });
-    expect(toActivityInput(validated(draft)).content).toEqual({ subtype: 'conversation', questionsList: ['P'] });
+  it('splits the conversation block into questions, keeping the wire payload as before', () => {
+    const draft = speakingDraft({ subtype: 'conversation', questionsText: '¿Cómo te llamas?\n\n  ¿De dónde eres?  ' });
+    expect(toActivityInput(validated(draft)).content).toEqual({
+      subtype: 'conversation', questionsList: ['¿Cómo te llamas?', '¿De dónde eres?'],
+    });
   });
 
   it('keeps talking points as sent when they are all filled', () => {

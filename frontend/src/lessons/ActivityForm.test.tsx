@@ -7,7 +7,7 @@ import type { ActivityDraft } from './lesson-schema';
 
 const base = { id: null, title: 'Actividad', instructions: 'Instrucciones', duration: 10 };
 
-const speaking: ActivityDraft = { ...base, key: 'a1', type: 'Speaking', content: { subtype: 'conversation', questionsList: ['¿Qué tal?'] } };
+const speaking: ActivityDraft = { ...base, key: 'a1', type: 'Speaking', content: { subtype: 'conversation', questionsText: '¿Qué tal?' } };
 const roleplay: ActivityDraft = {
   ...base, key: 'a6', type: 'Speaking',
   content: {
@@ -34,7 +34,8 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 it('shows the fields of each type and hides the others', () => {
   render(<Harness initial={speaking} />);
-  expect(screen.getByLabelText('Pregunta 1')).toHaveValue('¿Qué tal?');
+  expect(screen.getByLabelText('Preguntas (una por línea)')).toHaveValue('¿Qué tal?');
+  expect(screen.queryByLabelText('Pregunta 1')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Texto de lectura')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Consigna')).not.toBeInTheDocument();
   cleanup();
@@ -108,13 +109,39 @@ it('asks before discarding specific content when the type changes', async () => 
   render(<Harness initial={empty} />);
   await userEvent.selectOptions(screen.getByLabelText('Tipo'), 'Speaking');
   expect(clean).not.toHaveBeenCalled();
-  expect(onChange).toHaveBeenLastCalledWith({ ...empty, type: 'Speaking', content: { subtype: 'conversation', questionsList: [''] } });
+  expect(onChange).toHaveBeenLastCalledWith({ ...empty, type: 'Speaking', content: { subtype: 'conversation', questionsText: '' } });
+});
+
+it('writes conversation questions as one block, one per line', async () => {
+  render(<Harness initial={speaking} />);
+  const block = screen.getByLabelText('Preguntas (una por línea)');
+  expect(block).toHaveValue('¿Qué tal?');
+  await userEvent.type(block, '{enter}{enter}¿De dónde eres?');
+  expect(onChange).toHaveBeenLastCalledWith({
+    ...speaking,
+    content: { subtype: 'conversation', questionsText: '¿Qué tal?\n\n¿De dónde eres?' },
+  });
+});
+
+it('adds reading questions in bulk, one per line, dropping blank lines', async () => {
+  render(<Harness initial={reading} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Añadir en bloque' }));
+  await userEvent.type(screen.getByLabelText('preguntas (una por línea)'), '¿Cómo te llamas?{enter}{enter}¿De dónde eres?');
+  expect(screen.getByText('2 preguntas para añadir.')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Añadir 2 preguntas' }));
+  expect(onChange).toHaveBeenLastCalledWith({
+    ...reading,
+    content: { text: 'Un texto', questionsList: ['Pregunta', '¿Cómo te llamas?', '¿De dónde eres?'] },
+  });
+  // The rows are ordinary again: reorderable and removable one by one, and the panel closed empty.
+  expect(screen.getByLabelText('Pregunta 2')).toHaveValue('¿Cómo te llamas?');
+  expect(screen.queryByLabelText('preguntas (una por línea)')).not.toBeInTheDocument();
 });
 
 it('shows only the fields of the selected speaking subtype', async () => {
   render(<Harness initial={speaking} />);
   expect(screen.getByLabelText('Tipo de práctica oral')).toHaveValue('conversation');
-  expect(screen.getByLabelText('Pregunta 1')).toBeInTheDocument();
+  expect(screen.getByLabelText('Preguntas (una por línea)')).toBeInTheDocument();
   expect(screen.queryByLabelText('Guion de conversación (opcional)')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Tema')).not.toBeInTheDocument();
   cleanup();
@@ -158,14 +185,14 @@ it('asks before discarding meaningful roleplay content when the subtype changes,
   await userEvent.selectOptions(select, 'conversation');
   expect(onChange).toHaveBeenLastCalledWith({
     key: 'a6', id: null, title: 'Actividad', instructions: 'Instrucciones', duration: 10,
-    type: 'Speaking', content: { subtype: 'conversation', questionsList: [''] },
+    type: 'Speaking', content: { subtype: 'conversation', questionsText: '' },
   });
-  expect(screen.getByLabelText('Pregunta 1')).toHaveValue('');
+  expect(screen.getByLabelText('Preguntas (una por línea)')).toHaveValue('');
 });
 
 it('switches subtypes silently while everything is still blank', async () => {
   const confirm = vi.spyOn(window, 'confirm').mockClear().mockReturnValue(false);
-  const fresh: ActivityDraft = { ...base, key: 'a7', duration: null, type: 'Speaking', content: { subtype: 'conversation', questionsList: [''] } };
+  const fresh: ActivityDraft = { ...base, key: 'a7', duration: null, type: 'Speaking', content: { subtype: 'conversation', questionsText: '' } };
   render(<Harness initial={fresh} />);
   const select = screen.getByLabelText('Tipo de práctica oral');
   await userEvent.selectOptions(select, 'roleplay');
@@ -203,12 +230,12 @@ it('adds roles up to six and removes them down to two', async () => {
 });
 
 it('reorders rows with the up and down buttons', async () => {
-  const twoQuestions: ActivityDraft = { ...base, key: 'a9', type: 'Speaking', content: { subtype: 'conversation', questionsList: ['Uno', 'Dos'] } };
+  const twoQuestions: ActivityDraft = { ...base, key: 'a9', type: 'Reading', content: { text: 'Un texto', questionsList: ['Uno', 'Dos'] } };
   render(<Harness initial={twoQuestions} />);
   expect(screen.getByRole('button', { name: 'Subir pregunta 1' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Bajar pregunta 2' })).toBeDisabled();
   await userEvent.click(screen.getByRole('button', { name: 'Bajar pregunta 1' }));
-  expect(onChange).toHaveBeenLastCalledWith({ ...twoQuestions, content: { subtype: 'conversation', questionsList: ['Dos', 'Uno'] } });
+  expect(onChange).toHaveBeenLastCalledWith({ ...twoQuestions, content: { text: 'Un texto', questionsList: ['Dos', 'Uno'] } });
   expect(screen.getByLabelText('Pregunta 1')).toHaveValue('Dos');
   await userEvent.click(screen.getByRole('button', { name: 'Subir pregunta 2' }));
   expect(screen.getByLabelText('Pregunta 1')).toHaveValue('Uno');
