@@ -112,12 +112,18 @@ test('assign from the profile and from the lesson editor, then unassign from bot
     { headers: { ...auth, Origin: 'http://localhost:5173', 'X-Requested-With': 'Profefacilisimo' } });
   expect(((await still.json()) as { name: string }[]).map((student) => student.name)).toContain(name);
 
-  // Saving applies the staged removal, and the emptied step says so.
+  // Saving applies the staged removal and returns to the listing once the alert is dismissed.
   const savedPut = page.waitForResponse((response) =>
     response.url().includes('/api/lessons/' + lessonId) && response.request().method() === 'PUT');
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
   expect((await savedPut).status()).toBe(200);
   await page.getByRole('button', { name: 'Aceptar' }).click();
+  await expect(page.getByRole('heading', { name: 'Mis clases' })).toBeVisible();
+
+  // Reopened, the third step shows the emptied selection: the removal really reached the server.
+  await page.getByRole('link', { name: 'Editar ' + lessonTitle, exact: true }).click();
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await page.getByRole('button', { name: 'Siguiente', exact: true }).click();
   await expect(step.getByText('Todavía no has asignado estudiantes a esta clase.')).toBeVisible();
 
   // Assigning from the editor is the same step reversed: stage the pick, save, and the pair is back.
@@ -127,9 +133,9 @@ test('assign from the profile and from the lesson editor, then unassign from bot
   await page.getByRole('button', { name: 'Guardar clase', exact: true }).click();
   expect((await resavedPut).status()).toBe(200);
   await page.getByRole('button', { name: 'Aceptar' }).click();
-  await expect(step.getByRole('link', { name, exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Mis clases' })).toBeVisible();
 
-  // Back on the profile the lesson can still be unassigned from that side.
+  // The profile confirms the pair exists again, and it can still be unassigned from that side.
   await page.goto('/students');
   await page.getByRole('link', { name, exact: true }).click();
   await expect(page.getByRole('heading', { name: lessonTitle })).toBeVisible();

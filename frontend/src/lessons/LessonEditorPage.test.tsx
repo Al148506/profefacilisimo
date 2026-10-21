@@ -35,7 +35,7 @@ function page(path = '/lessons/l1/edit') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   function TestRoutes() {
     return <><Link className="brand" to="/">Inicio</Link>
-      <Routes><Route path="/" element={<h1>Listado</h1>} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Routes></>;
+      <Routes><Route path="/" element={<><h1>Listado</h1><Link to="/lessons/l1/edit">Reabrir clase</Link></>} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /></Routes></>;
   }
   const router = createMemoryRouter([{ path: '*', element: <TestRoutes /> }], { initialEntries: [path] });
   render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>);
@@ -69,7 +69,8 @@ it('creates using trimmed metadata, supports topic datalist, and opens the saved
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
   await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
-  expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
+  // A clean save returns to the listing once the confirmation alert is dismissed.
+  expect(await screen.findByRole('heading', { name: 'Listado' })).toBeInTheDocument();
   expect(saveLesson).toHaveBeenCalledWith({ title: 'Nueva', level: 'B1', topic: 'Tema', objective: 'Objetivo', activities: [] }, undefined);
 });
 
@@ -82,7 +83,7 @@ it('creates lesson successfully without topic', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
   await userEvent.click(screen.getByRole('button', { name: 'Siguiente' }));
   await userEvent.click(screen.getByRole('button', { name: 'Guardar clase' }));
-  expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Listado' })).toBeInTheDocument();
   expect(saveLesson).toHaveBeenCalledWith({ title: 'Sin Tema', level: 'A2', topic: '', objective: 'Objetivo', activities: [] }, undefined);
 });
 
@@ -148,11 +149,11 @@ it('disables saving controls and clears dirty state only after success', async (
   expect(screen.getByRole('button', { name: 'Volver a Mis clases' })).toBeDisabled();
   resolve({ ...detail, title: 'Original editada' });
   await waitFor(() => expect(notifyLessonSaved).toHaveBeenCalledTimes(1));
-  // Nothing is pending any more, so leaving is not questioned.
+  // The alert is the end of the session: once it resolves, the editor returns to the listing by
+  // itself, and nothing is pending any more, so the trip is not questioned.
   const confirm = vi.spyOn(window, 'confirm');
-  await userEvent.click(screen.getByRole('button', { name: 'Volver a Mis clases' }));
+  expect(await screen.findByRole('heading', { name: 'Listado' })).toBeInTheDocument();
   expect(confirm).not.toHaveBeenCalled();
-  expect(screen.getByRole('heading', { name: 'Listado' })).toBeInTheDocument();
 });
 it('warns on controlled navigation and beforeunload, cancellation preserves fields', async () => {
   page();
@@ -251,10 +252,12 @@ it('saves the whole set in the arranged order and adopts the Ids the server retu
       { id: null, type: 'Writing', title: 'Escritura', instructions: 'Instrucciones', estimatedDuration: 10, content: { prompt: 'Escribe' } },
     ],
   });
-  // The editor opened the saved lesson on the step where the save was pressed: the indicator walks
-  // back to the activities, whose draft was rebuilt from the canonical response.
-  expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: 'Actividades' }));
+  // A clean save dismisses itself back to the listing; reopening the saved lesson shows the draft
+  // rebuilt from the canonical response.
+  expect(await screen.findByRole('heading', { name: 'Listado' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('link', { name: 'Reabrir clase' }));
+  await screen.findByLabelText('Título');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
   expect(screen.getByText('Duración total:')).toHaveTextContent('15 min');
   // Editing a saved row reopens the window on its copy; the list waits for the commit again.
   await userEvent.click(screen.getByRole('button', { name: /^Conversación/ }));
@@ -316,10 +319,12 @@ it('saves a complete roleplay with the exact payload and reopens it with every f
       objective: 'Pedir la cuenta', material: null, script: 'Waiter: Good evening!', practiceMode: 'scripted',
     },
   });
-  // Reopening the saved lesson restores the whole roleplay, not only the questions. The save landed
-  // on the students step, so the indicator walks back to the activities first.
-  await screen.findByRole('heading', { name: 'Editar clase' });
-  await userEvent.click(screen.getByRole('button', { name: 'Actividades' }));
+  // Reopening the saved lesson restores the whole roleplay, not only the questions: the clean save
+  // returned to the listing, and reopening walks back to the activities where the card lives.
+  await screen.findByRole('heading', { name: 'Listado' });
+  await userEvent.click(screen.getByRole('link', { name: 'Reabrir clase' }));
+  await screen.findByLabelText('Título');
+  await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
   await userEvent.click(screen.getByRole('button', { name: /^Roleplay en el restaurante/ }));
   expect(screen.getByLabelText('Tipo de práctica oral')).toHaveValue('roleplay');
   expect(screen.getByLabelText('Situación o contexto')).toHaveValue('Cena en un restaurante');
@@ -507,7 +512,7 @@ it('creates the lesson and assigns the staged students to its new id', async () 
   // The assignment rides on the freshly created lesson: POST first, pair against its returned id.
   await waitFor(() => expect(assignStudentToLesson).toHaveBeenCalledWith('l1', 's2'));
   expect(saveLesson).toHaveBeenCalledTimes(1);
-  expect(await screen.findByRole('heading', { name: 'Editar clase' })).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'Listado' })).toBeInTheDocument();
 });
 
 it('warns about the assignments that failed without saving the lesson twice', async () => {

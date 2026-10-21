@@ -221,9 +221,11 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       if (!initial) { carriedStep = step; bypassBlocker.current = true; navigate('/lessons/' + saved.id + '/edit', { replace: true }); }
       // The alert is a complement: it fires after the server confirmed and the state is already
       // settled, so it cannot interfere with the save or with the navigation above. The class is
-      // saved in both cases; the warning only names the assignments that did not make it.
+      // saved in both cases; the warning only names the assignments that did not make it. With a
+      // clean save, dismissing the alert ends the editing session: back to the teacher's classes.
+      // With assignment failures the editor stays open, where the staged pairs can be retried.
       if (assignmentFailures.length > 0) void notifyLessonSavedWithIssues(assignmentFailures);
-      else void notifyLessonSaved();
+      else void Promise.resolve(notifyLessonSaved()).then(() => { bypassBlocker.current = true; navigate('/', { replace: true }); });
     },
     onError: (error) => {
       // The draft is kept exactly as it is: a failed save never discards the teacher's work.
