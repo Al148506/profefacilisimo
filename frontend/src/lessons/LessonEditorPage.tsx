@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
+import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Plus, X, ArrowLeft, ArrowRight, Save, RefreshCw } from 'lucide-react';
 import { useAuth } from '../auth';
 import { Button } from '../components/Button';
@@ -30,12 +30,11 @@ import { COMMON_TOPICS } from './lesson-topics';
 type DraftErrors = Record<string, ActivityFieldErrors>;
 
 /**
- * Where a mount of the editor starts. The step lives in component state, but creating a lesson
- * navigates to its `/edit` route, which mounts a fresh editor: this carries the step where the
- * save was pressed across that remount so the teacher lands where they left. Read on mount and
- * then reset, so a later navigation — the list, the player — always opens on the metadata again.
+ * Where the create-save redirect lands the fresh editor. It travels as router state, not a module
+ * variable: a later navigation — the listing after the save alert, the list, the player — replaces
+ * the history entry and takes the step with it, so every other mount opens on the metadata again.
  */
-let carriedStep: EditorStep = 'info';
+type EditorRouteState = { editorStep?: EditorStep };
 
 /** Two assignment sets are the same when they hold exactly the same student ids. */
 function sameStudents(a: readonly AssignedStudent[], b: readonly AssignedStudent[]): boolean {
@@ -111,7 +110,7 @@ type ActivityModalState = {
   closing: boolean;
 };
 
-function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetails }) {
+function LessonForm({ userId, initial, initialStep = 'info' }: { userId: string; initial?: LessonDetails; initialStep?: EditorStep }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const bypassBlocker = useRef(false);
@@ -122,13 +121,11 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       : { title: '', level: 'A2', topic: '', objective: '' },
   });
   // The step lives in state, not in the URL: the wizard is local to the draft, and a plain reload
-  // simply starts again at the first step without losing the values RHF keeps in memory.
-  // The carried step is consumed exactly once, when this editor mounts.
-  const [step, setStep] = useState<EditorStep>(carriedStep);
+  // simply starts again at the first step without losing the values RHF keeps in memory. The save
+  // redirect of a new lesson hands over the step where the save was pressed through router state.
+  const [step, setStep] = useState<EditorStep>(initialStep);
   // The draft is built once from the loaded lesson, so a refetch can never overwrite local edits.
   const [activities, setActivities] = useState<ActivityDraft[]>(() => (initial?.activities ?? []).map(draftFromSaved));
-  // Once this editor is alive it owns the step, so nothing else can claim it on the next mount.
-  useEffect(() => { carriedStep = 'info'; }, []);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [newType, setNewType] = useState<ActivityType>('Speaking');
   const [errors, setErrors] = useState<DraftErrors>({});
@@ -218,7 +215,7 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
       setSelectedKey(canonical[index]?.key ?? null);
       client.setQueryData(lessonDetailKey(userId, saved.id), saved);
       void client.invalidateQueries({ queryKey: ['lessons', userId] });
-      if (!initial) { carriedStep = step; bypassBlocker.current = true; navigate('/lessons/' + saved.id + '/edit', { replace: true }); }
+      if (!initial) { bypassBlocker.current = true; navigate('/lessons/' + saved.id + '/edit', { replace: true, state: { editorStep: step } }); }
       // The alert is a complement: it fires after the server confirmed and the state is already
       // settled, so it cannot interfere with the save or with the navigation above. The class is
       // saved in both cases; the warning only names the assignments that did not make it. With a
@@ -491,6 +488,19 @@ function LessonForm({ userId, initial }: { userId: string; initial?: LessonDetai
 export default function LessonEditorPage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // A redirected mount starts on the step the save pressed; the state is wiped right after, so a
+  // plain reload — or any later visit to this URL — opens on the metadata again.
+  const [startStep] = useState<EditorStep>(() => (location.state as EditorRouteState | null)?.editorStep ?? 'info');
+  const stepStateCleared = useRef(false);
+  useEffect(() => {
+    if (stepStateCleared.current) return;
+    stepStateCleared.current = true;
+    if ((location.state as EditorRouteState | null)?.editorStep) {
+      navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+    }
+  }, [location, navigate]);
   const query = useQuery({
     queryKey: lessonDetailKey(user?.id ?? '', id ?? ''),
     queryFn: ({ signal }) => getLesson(id!, signal),
@@ -502,5 +512,5 @@ export default function LessonEditorPage() {
     {query.isPending ? <p role="status">Cargando clase…</p> : <div role="alert" className="error"><p>{query.error?.message}</p><Button icon={RefreshCw} disabled={query.isFetching} onClick={() => void query.refetch()}>Reintentar</Button></div>}
     <Link className="button secondary pf-btn" to="/"><ArrowLeft aria-hidden="true" size={17} />Volver a Mis clases</Link>
   </section>;
-  return <LessonForm key={user.id + '-' + id} userId={user.id} initial={query.data} />;
+  return <LessonForm key={user.id + '-' + id} userId={user.id} initial={query.data} initialStep={startStep} />;
 }

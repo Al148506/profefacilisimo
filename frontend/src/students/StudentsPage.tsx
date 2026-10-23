@@ -40,9 +40,8 @@ export default function StudentsPage({ user, trash = false }: { user: User; tras
   return <section className="card students-page" data-testid="students-page">
     <p className="eyebrow">Tus estudiantes</p>
     <h1>{trash ? 'Papelera de estudiantes' : 'Mis estudiantes'}</h1>
-    <nav className="students-navigation">{trash ? <Link to="/students">Volver a Mis estudiantes</Link> : <>
-      <Link className="button pf-btn" to="/students/new"><Plus aria-hidden="true" size={17} />Crear estudiante</Link><Link to="/students/trash">Papelera</Link><Link to="/">Mis clases</Link>
-    </>}</nav>
+    {/* The Sidebar owns section switching now; only the flow links stay here. */}
+    <nav className="students-navigation">{trash ? <Link to="/students">Volver a Mis estudiantes</Link> : <Link className="button pf-btn" to="/students/new"><Plus aria-hidden="true" size={17} />Crear estudiante</Link>}</nav>
     <p>{trash
       ? 'Restaura tus estudiantes o elimínalos definitivamente.'
       : 'Encuentra a tus estudiantes por nombre o intereses.'}</p>

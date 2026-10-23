@@ -132,7 +132,7 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Enviar a papelera Copia independiente', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Copia independiente', exact: true })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Papelera', exact: true }).click();
+  await page.getByRole('link', { name: 'Papelera de clases', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Copia independiente', exact: true })).toBeVisible();
   await expect(page.getByLabel('Buscar por título')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Duplicar Copia independiente', exact: true })).toHaveCount(0);
@@ -148,7 +148,7 @@ test('create and edit metadata, reload saved values and cancel discarding a draf
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Enviar a papelera Copia independiente', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Copia independiente', exact: true })).toHaveCount(0);
-  await page.getByRole('link', { name: 'Papelera', exact: true }).click();
+  await page.getByRole('link', { name: 'Papelera de clases', exact: true }).click();
   page.once('dialog', (dialog) => { expect(dialog.message()).toContain('todas sus actividades'); return dialog.dismiss(); });
   await page.getByRole('button', { name: 'Eliminar definitivamente Copia independiente', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Copia independiente', exact: true })).toBeVisible();
