@@ -48,7 +48,7 @@ async function createLesson(
 
 test('create a student, see it listed and open its profile', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('link', { name: 'Estudiantes' }).click();
+  await page.getByRole('link', { name: 'Estudiantes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Mis estudiantes' })).toBeVisible();
 
   await page.getByRole('link', { name: 'Crear estudiante' }).click();
@@ -83,7 +83,7 @@ test('assign from the profile and from the lesson editor, then unassign from bot
   const lessonTitle = 'Clase asignable ' + Date.now();
   const lessonId = await createLesson(page, auth, lessonTitle);
 
-  await page.getByRole('link', { name: 'Estudiantes' }).click();
+  await page.getByRole('link', { name: 'Estudiantes', exact: true }).click();
   await page.getByRole('link', { name: 'Crear estudiante' }).click();
   const name = 'Bruno ' + Date.now();
   await page.getByLabel('Nombre', { exact: true }).fill(name);
@@ -149,7 +149,7 @@ test('trash a student, restore it, keep its assignments, and delete it definitiv
   const lessonTitle = 'Clase viva ' + Date.now();
   await createLesson(page, auth, lessonTitle);
 
-  await page.getByRole('link', { name: 'Estudiantes' }).click();
+  await page.getByRole('link', { name: 'Estudiantes', exact: true }).click();
   await page.getByRole('link', { name: 'Crear estudiante' }).click();
   const name = 'Carla ' + Date.now();
   await page.getByLabel('Nombre', { exact: true }).fill(name);
@@ -175,8 +175,8 @@ test('trash a student, restore it, keep its assignments, and delete it definitiv
 
   // A trashed lesson is likewise marked on the profile and cannot be unassigned until restored.
   await page.getByRole('button', { name: 'Volver a Mis clases' }).click();
-  await page.getByRole('link', { name: 'Estudiantes' }).click();
-  await page.getByRole('link', { name: 'Papelera' }).click();
+  await page.getByRole('link', { name: 'Estudiantes', exact: true }).click();
+  await page.getByRole('link', { name: 'Papelera de estudiantes' }).click();
   await expect(page.getByRole('heading', { name: 'Papelera de estudiantes' })).toBeVisible();
   await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Restaurar ' + name }).click();
@@ -191,7 +191,7 @@ test('trash a student, restore it, keep its assignments, and delete it definitiv
 
   // Delete definitively removes the student and its assignments, and leaves the lesson alone.
   await page.getByRole('button', { name: 'Enviar a papelera' }).click();
-  await page.getByRole('link', { name: 'Papelera' }).click();
+  await page.getByRole('link', { name: 'Papelera de estudiantes' }).click();
   await page.getByRole('button', { name: 'Eliminar definitivamente ' + name }).click();
   await expect(page.getByText('La papelera está vacía.')).toBeVisible();
   await page.getByRole('link', { name: 'Volver a Mis estudiantes' }).click();
@@ -208,7 +208,7 @@ test('trash a student, restore it, keep its assignments, and delete it definitiv
 
 test('filter the listing by name and level, and clear the filters', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('link', { name: 'Estudiantes' }).click();
+  await page.getByRole('link', { name: 'Estudiantes', exact: true }).click();
   for (const [name, level] of [['Filtro Uno', 'A2'], ['Filtro Dos', 'B2']]) {
     await page.getByRole('link', { name: 'Crear estudiante' }).click();
     await page.getByLabel('Nombre', { exact: true }).fill(name);

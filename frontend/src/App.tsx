@@ -4,14 +4,15 @@ import StudentsPage from './students/StudentsPage';
 import StudentsTrashPage from './students/StudentsTrashPage';
 import StudentFormPage from './students/StudentFormPage';
 import StudentProfilePage from './students/StudentProfilePage';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, LogIn, UserPlus, RefreshCw, ArrowLeft } from 'lucide-react';
+import { LogIn, UserPlus, RefreshCw, ArrowLeft } from 'lucide-react';
 import { Button } from './components/Button';
-import { initializeAuth, login, logout, register, retryInitialization, useAuth, type User } from './auth';
+import AppLayout from './components/AppLayout';
+import { initializeAuth, login, register, retryInitialization, useAuth } from './auth';
 import LessonsPage from './lessons/LessonsPage';
 import RouteErrorBoundary from './RouteErrorBoundary';
 import { loginSchema, registerSchema, type Credentials } from './validation';
@@ -21,14 +22,9 @@ function ProtectedRoute() {
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
-function SessionBar({ user }: { user: User }) {
-  const client = useQueryClient();
-  const signOut = useMutation({ mutationFn: logout, retry: false, onSuccess: () => client.clear() });
-  return <div className="session-bar">
-    <p>Sesión iniciada como <strong>{user.email}</strong>.</p>
-    {signOut.isError && <p role="alert" className="error">No se pudo cerrar la sesión en el servidor. Vuelve a intentarlo.</p>}
-    <Button variant="secondary" icon={LogOut} onClick={() => signOut.mutate()} disabled={signOut.isPending}>{signOut.isPending ? 'Cerrando…' : 'Cerrar sesión'}</Button>
-  </div>;
+/** Login, register and the 404 keep the old plain column: they exist outside the shell. */
+function PlainPage({ children }: { children: ReactNode }) {
+  return <main>{children}</main>;
 }
 
 function AuthPage({ registering = false }: { registering?: boolean }) {
@@ -80,14 +76,17 @@ function StudentsDashboard({ trash = false }: { trash?: boolean }) {
 }
 
 export default function App() {
-  const { user, loading, error } = useAuth();
+  const { loading, error } = useAuth();
   const location = useLocation();
   useEffect(() => { void initializeAuth(); }, []);
-  return <><header><Link to="/" className="brand"><span aria-hidden="true">pf.</span> Profe Facilísimo</Link><span className="header-note">Menos preparación. Más conversación.</span>{user && <SessionBar user={user} />}</header>
-    <main>{loading ? <p role="status">Preparando tu espacio…</p> : error ? <section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><Button icon={RefreshCw} onClick={() => void retryInitialization()}>Reintentar</Button></section> : <RouteErrorBoundary key={location.pathname}><Routes>
-      <Route path="/login" element={<AuthPage key="login" />} />
-      <Route path="/register" element={<AuthPage key="register" registering />} />
+  // The session bootstrap gates the whole tree (layout and plain pages alike), exactly as before:
+  // while it runs, no route mounts and the protected pages are never rendered without a user.
+  return <>{loading ? <main><p role="status">Preparando tu espacio…</p></main> : error ? <main><section className="card"><h1>No hay conexión</h1><p role="alert">{error}</p><Button icon={RefreshCw} onClick={() => void retryInitialization()}>Reintentar</Button></section></main> : <RouteErrorBoundary key={location.pathname}><Routes>
+    <Route element={<AppLayout />}>
       <Route element={<ProtectedRoute />}><Route path="/" element={<Dashboard />} /><Route path="/lessons/trash" element={<Dashboard trash />} /><Route path="/lessons/new" element={<LessonEditorPage />} /><Route path="/lessons/:id/edit" element={<LessonEditorPage />} /><Route path="/lessons/:id/play" element={<LessonPlayerPage />} /><Route path="/students" element={<StudentsDashboard />} /><Route path="/students/trash" element={<StudentsTrashPage />} /><Route path="/students/new" element={<StudentFormPage />} /><Route path="/students/:id" element={<StudentProfilePage />} /><Route path="/students/:id/edit" element={<StudentFormPage />} /></Route>
-      <Route path="*" element={<section className="card"><h1>Página no encontrada</h1><Link className="button pf-btn" to="/"><ArrowLeft aria-hidden="true" size={17} />Volver al inicio</Link></section>} />
-    </Routes></RouteErrorBoundary>}</main><footer>Un espacio para enseñar español, a tu manera.</footer></>;
+    </Route>
+    <Route path="/login" element={<PlainPage><AuthPage key="login" /></PlainPage>} />
+    <Route path="/register" element={<PlainPage><AuthPage key="register" registering /></PlainPage>} />
+    <Route path="*" element={<PlainPage><section className="card"><h1>Página no encontrada</h1><Link className="button pf-btn" to="/"><ArrowLeft aria-hidden="true" size={17} />Volver al inicio</Link></section></PlainPage>} />
+  </Routes></RouteErrorBoundary>}<footer>Menos preparación. Más conversación.</footer></>;
 }
